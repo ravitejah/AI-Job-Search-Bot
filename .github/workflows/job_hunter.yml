@@ -2,11 +2,13 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    - cron: '0 10 * * *'   # 6:00 AM EDT
-    - cron: '0 13 * * *'   # 9:00 AM EDT
-    - cron: '0 16 * * *'   # 12:00 PM EDT
-    - cron: '0 19 * * *'   # 3:00 PM EDT
-    - cron: '0 22 * * *'   # 6:00 PM EDT
+    # GitHub Actions uses UTC. Tampa FL = EDT (UTC-4) in summer, EST (UTC-5) in winter
+    # Currently EDT (UTC-4):
+    - cron: '0 10 * * *'   # 6:00 AM EDT  (10:00 UTC)
+    - cron: '0 13 * * *'   # 9:00 AM EDT  (13:00 UTC)
+    - cron: '0 16 * * *'   # 12:00 PM EDT (16:00 UTC)
+    - cron: '0 19 * * *'   # 3:00 PM EDT  (19:00 UTC)
+    - cron: '0 22 * * *'   # 6:00 PM EDT  (22:00 UTC)
   workflow_dispatch:
 
 jobs:
@@ -17,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
