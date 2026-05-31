@@ -22,7 +22,7 @@ def build_linkedin_url(role: str, location: str) -> str:
     from urllib.parse import quote
     role_enc = quote(role)
     loc_enc = quote(location)
-    # f_TPR=r86400 = past 24 hours; f_E=2,3 = Entry/Associate level
+    # f_TPR=r86400 = past 24 hours
     return (
         f"https://www.linkedin.com/jobs/search/"
         f"?keywords={role_enc}&location={loc_enc}"
@@ -113,32 +113,8 @@ async def scrape_linkedin(role: str, location: str, max_jobs: int = 25) -> list[
         finally:
             await browser.close()
 
-    print(f"  📋 LinkedIn [{role}] → {len(jobs)} jobs found")
+    print(f"  📋 LinkedIn [{role} - {location}] → {len(jobs)} jobs found")
     return jobs
-
-
-async def fetch_job_description(url: str) -> str:
-    """Fetch full job description from a LinkedIn job page."""
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
-        page = await browser.new_page()
-        try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            await asyncio.sleep(2)
-
-            # Try to expand "Show more"
-            show_more = await page.query_selector("button.show-more-less-html__button")
-            if show_more:
-                await show_more.click()
-                await asyncio.sleep(1)
-
-            desc_el = await page.query_selector(".show-more-less-html__markup, .description__text")
-            desc = (await desc_el.inner_text()).strip() if desc_el else ""
-            return desc[:3000]  # cap at 3k chars for AI processing
-        except Exception:
-            return ""
-        finally:
-            await browser.close()
 
 
 async def run_linkedin_scraper() -> list[dict]:
@@ -146,8 +122,8 @@ async def run_linkedin_scraper() -> list[dict]:
     all_jobs = []
     seen_ids = set()
 
-    for role in SEARCH["roles"][:3]:  # top 3 roles
-        for location in SEARCH["locations"][:2]:  # top 2 locations
+    for role in SEARCH["roles"]:  # Removed limits
+        for location in SEARCH["locations"]:  # Removed limits
             jobs = await scrape_linkedin(role, location)
             for job in jobs:
                 if job["id"] not in seen_ids:

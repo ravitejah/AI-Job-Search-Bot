@@ -18,14 +18,14 @@ def make_job_id(url: str) -> str:
 
 def build_glassdoor_url(role: str, location: str) -> str:
     return (
-        f"https://www.glassdoor.com/Job/jobs.htm"
-        f"?sc.keyword={quote(role)}&locT=N&locId=1&sortBy=date_desc"
+        f"https://www.glassdoor.co.in/Job/jobs.htm"
+        f"?sc.keyword={quote(role)}&sortBy=date_desc"
     )
 
 
 async def scrape_glassdoor(role: str, max_jobs: int = 20) -> list[dict]:
     jobs = []
-    url = build_glassdoor_url(role, "United States")
+    url = build_glassdoor_url(role, "India")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -38,7 +38,7 @@ async def scrape_glassdoor(role: str, max_jobs: int = 20) -> list[dict]:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
-            locale="en-US"
+            locale="en-IN"
         )
         page = await context.new_page()
         try:
@@ -83,7 +83,7 @@ async def scrape_glassdoor(role: str, max_jobs: int = 20) -> list[dict]:
                         posted_at = scrape_time_text(raw)
 
                     if href and not href.startswith("http"):
-                        href = "https://www.glassdoor.com" + href
+                        href = "https://www.glassdoor.co.in" + href
 
                     if title and href:
                         jobs.append({
@@ -112,7 +112,7 @@ async def scrape_glassdoor(role: str, max_jobs: int = 20) -> list[dict]:
 async def run_glassdoor_scraper() -> list[dict]:
     all_jobs = []
     seen_ids = set()
-    for role in SEARCH["roles"][:2]:
+    for role in SEARCH["roles"]: # Removed limits
         jobs = await scrape_glassdoor(role)
         for job in jobs:
             if job["id"] not in seen_ids:

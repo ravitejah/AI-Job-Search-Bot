@@ -50,8 +50,9 @@ def _parse_indeed_date(text: str) -> str:
 
 
 def build_indeed_url(role: str, location: str) -> str:
+    # Using in.indeed.com for India
     return (
-        f"https://www.indeed.com/jobs?q={quote(role)}"
+        f"https://in.indeed.com/jobs?q={quote(role)}"
         f"&l={quote(location)}&sort=date&fromage=1&radius=0"
     )
 
@@ -102,7 +103,7 @@ async def scrape_indeed(role: str, location: str, max_jobs: int = 25) -> list[di
                         posted_at = _parse_indeed_date(date_text)
 
                     if href and not href.startswith("http"):
-                        href = "https://www.indeed.com" + href
+                        href = "https://in.indeed.com" + href
 
                     if title and href:
                         jobs.append({
@@ -131,8 +132,8 @@ async def scrape_indeed(role: str, location: str, max_jobs: int = 25) -> list[di
 async def run_indeed_scraper() -> list[dict]:
     all_jobs = []
     seen_ids = set()
-    for role in SEARCH["roles"][:2]:
-        for location in SEARCH["locations"][:1]:
+    for role in SEARCH["roles"]: # Removed limits
+        for location in SEARCH["locations"]: # Removed limits
             jobs = await scrape_indeed(role, location)
             for job in jobs:
                 if job["id"] not in seen_ids:

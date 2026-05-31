@@ -18,13 +18,14 @@ def make_job_id(url: str) -> str:
     return "jr_" + hashlib.md5(url.encode()).hexdigest()[:14]
 
 
-async def scrape_jobright_api(role: str, max_jobs: int = 25) -> list[dict]:
+async def scrape_jobright_api(role: str, location: str, max_jobs: int = 25) -> list[dict]:
     """Try JobRight's internal API first — much faster and more reliable."""
     jobs = []
     try:
         url = (
             f"https://jobright.ai/api/jobs/search"
             f"?keyword={urllib.parse.quote(role)}"
+            f"&location={urllib.parse.quote(location)}"
             f"&sortBy=date&pageSize={max_jobs}&page=1"
             f"&postedWithin=24"  # last 24 hours
         )
@@ -40,31 +41,31 @@ async def scrape_jobright_api(role: str, max_jobs: int = 25) -> list[dict]:
                 job_id  = str(item.get("id", item.get("jobId", "")))
                 title   = item.get("title", item.get("jobTitle", "")).strip()
                 company = item.get("company", item.get("companyName", "Unknown")).strip()
-                location = item.get("location", item.get("jobLocation", "United States")).strip()
+                loc     = item.get("location", item.get("jobLocation", location)).strip()
                 href    = item.get("url", item.get("applyUrl", f"https://jobright.ai/jobs/{job_id}"))
                 posted  = item.get("postedAt", item.get("datePosted", datetime.now().isoformat()))
 
                 if title and href:
                     jobs.append({
                         "id": make_job_id(href), "title": title,
-                        "company": company, "location": location,
+                        "company": company, "location": loc,
                         "url": href, "source": "JobRight",
                         "posted_at": posted, "job_type": "Full-time", "description": "",
                     })
         if jobs:
-            print(f"  📋 JobRight API [{role}] → {len(jobs)} jobs found")
+            print(f"  📋 JobRight API [{role} - {location}] → {len(jobs)} jobs found")
             return jobs
     except Exception as e:
         pass  # Fall through to browser scraping
 
     # Browser fallback
-    return await scrape_jobright_browser(role, max_jobs)
+    return await scrape_jobright_browser(role, location, max_jobs)
 
 
-async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
+async def scrape_jobright_browser(role: str, location: str, max_jobs: int = 20) -> list[dict]:
     """Browser-based fallback for JobRight."""
     jobs = []
-    url = f"https://jobright.ai/jobs/search?keyword={urllib.parse.quote(role)}&sortBy=date"
+    url = f"https://jobright.ai/jobs/search?keyword={urllib.parse.quote(role)}&location={urllib.parse.quote(location)}&sortBy=date"
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -89,14 +90,14 @@ async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
                     for item in items:
                         title   = item.get("title", item.get("jobTitle", "")).strip()
                         company = item.get("company", item.get("companyName", "Unknown")).strip()
-                        location = item.get("location", "United States")
+                        loc     = item.get("location", "India") # Changed from US to India
                         job_id  = str(item.get("id", item.get("jobId", "")))
                         href    = item.get("url", f"https://jobright.ai/jobs/{job_id}")
                         posted  = item.get("postedAt", item.get("datePosted", ""))
                         if title:
                             captured_jobs.append({
                                 "id": make_job_id(href or title+company),
-                                "title": title, "company": company, "location": location,
+                                "title": title, "company": company, "location": loc,
                                 "url": href, "source": "JobRight",
                                 "posted_at": posted, "job_type": "Full-time", "description": "",
                             })
@@ -118,7 +119,7 @@ async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
                 )
                 for card in cards[:max_jobs]:
                     try:
-                        title = company = location = href = posted = ""
+                        title = company = loc = href = posted = ""
                         for sel in ["h2","h3","[class*='title']"]:
                             el = await card.query_selector(sel)
                             if el: title = (await el.inner_text()).strip(); break
@@ -127,7 +128,7 @@ async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
                             if el: company = (await el.inner_text()).strip(); break
                         for sel in ["[class*='location']"]:
                             el = await card.query_selector(sel)
-                            if el: location = (await el.inner_text()).strip(); break
+                            if el: loc = (await el.inner_text()).strip(); break
                         for sel in ["time","[class*='date']","[class*='posted']"]:
                             el = await card.query_selector(sel)
                             if el:
@@ -141,7 +142,7 @@ async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
                         if title and href:
                             jobs.append({
                                 "id": make_job_id(href), "title": title,
-                                "company": company or "Unknown", "location": location,
+                                "company": company or "Unknown", "location": loc or "India", # Fallback to India
                                 "url": href, "source": "JobRight",
                                 "posted_at": posted, "job_type": "Full-time", "description": "",
                             })
@@ -152,20 +153,21 @@ async def scrape_jobright_browser(role: str, max_jobs: int = 20) -> list[dict]:
         finally:
             await browser.close()
 
-    print(f"  📋 JobRight browser [{role}] → {len(jobs)} jobs found")
+    print(f"  📋 JobRight browser [{role} - {location}] → {len(jobs)} jobs found")
     return jobs
 
 
 async def run_jobright_scraper() -> list[dict]:
     all_jobs = []
     seen_ids = set()
-    for role in SEARCH["roles"][:2]:
-        jobs = await scrape_jobright_api(role)
-        for job in jobs:
-            if job["id"] not in seen_ids:
-                seen_ids.add(job["id"])
-                all_jobs.append(job)
-        await asyncio.sleep(3)
+    for role in SEARCH["roles"][:5]: # Checking more roles
+        for location in SEARCH["locations"]: # Checking all locations
+            jobs = await scrape_jobright_api(role, location)
+            for job in jobs:
+                if job["id"] not in seen_ids:
+                    seen_ids.add(job["id"])
+                    all_jobs.append(job)
+            await asyncio.sleep(3)
     return all_jobs
 
 

@@ -9,14 +9,20 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
-from config import SCHEDULER, SEARCH
+# Safe import for SCHEDULER in case it's missing from config
+from config import SEARCH
+try:
+    from config import SCHEDULER
+except ImportError:
+    SCHEDULER = {"check_interval_minutes": 60}
+
 from data.database import init_db, job_exists, job_exists_by_title_company, save_job, bulk_save_seen, get_stats
 from scrapers.linkedin_scraper  import run_linkedin_scraper
 from scrapers.jobright_scraper  import run_jobright_scraper
 from scrapers.indeed_scraper    import run_indeed_scraper
 from scrapers.glassdoor_scraper import run_glassdoor_scraper
-from scrapers.dice_scraper      import run_dice_scraper
-from scrapers.handshake_scraper import run_handshake_scraper
+# from scrapers.dice_scraper      import run_dice_scraper
+# from scrapers.handshake_scraper import run_handshake_scraper
 from ai_engine.matcher import filter_jobs, preload_common_answers
 from notifier.notifications import notify_all
 from scrapers.recency_filter import apply_recency_filter
@@ -25,20 +31,19 @@ from scrapers.recency_filter import apply_recency_filter
 SCRAPERS = [
     ("LinkedIn",  run_linkedin_scraper),
     ("Indeed",    run_indeed_scraper),
-    ("Dice",      run_dice_scraper),
+    # ("Dice",      run_dice_scraper),
     ("Glassdoor", run_glassdoor_scraper),
-    ("Handshake", run_handshake_scraper),
-    ("JobRight",  run_jobright_scraper),
+    # ("Handshake", run_handshake_scraper),
+    # ("JobRight",  run_jobright_scraper),
 ]
 
 
 def print_banner():
     print("""
 ╔══════════════════════════════════════════════════════╗
-║  🎯 JOB HUNTER — Multi-Platform Data Engineer Bot   ║
-║  Sources: LinkedIn · Indeed · Dice · Glassdoor      ║
-║           Handshake · JobRight                      ║
-║  Built for: Sri Krishna Sai Kota                    ║
+║  🎯 JOB HUNTER — Multi-Platform Java Full Stack Bot  ║
+║  Sources: LinkedIn · Indeed · Glassdoor · JobRight   ║
+║  Built for: Raviteja Ramisetti                       ║
 ╚══════════════════════════════════════════════════════╝
     """)
 

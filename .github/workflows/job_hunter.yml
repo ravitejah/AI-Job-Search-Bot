@@ -2,19 +2,14 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    # GitHub Actions uses UTC. Tampa FL = EDT (UTC-4) in summer, EST (UTC-5) in winter
-    # Currently EDT (UTC-4):
-    - cron: '0 10 * * *'   # 6:00 AM EDT  (10:00 UTC)
-    - cron: '0 13 * * *'   # 9:00 AM EDT  (13:00 UTC)
-    - cron: '0 16 * * *'   # 12:00 PM EDT (16:00 UTC)
-    - cron: '0 19 * * *'   # 3:00 PM EDT  (19:00 UTC)
-    - cron: '0 22 * * *'   # 6:00 PM EDT  (22:00 UTC)
+    # 9:00 AM IST (3:30 UTC) EVERY DAY
+    - cron: '30 3 * * *'
   workflow_dispatch:
 
 jobs:
   scrape-and-notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -48,38 +43,43 @@ jobs:
         run: |
           cat > config.py << PYEOF
           PROFILE = {
-              "name": "Sri Krishna Sai Kota",
-              "email": "srikrishnasaikota@gmail.com",
-              "phone": "813-509-4528",
-              "linkedin": "https://www.linkedin.com/in/srikrishnasai/",
-              "github": "https://github.com/KRISHNA-05-06",
-              "location": "Tampa, FL",
+              "name": "Raviteja Ramisetti",
+              "email": "$EMAIL_SENDER",
+              "phone": "+91 93471 34834",
+              "linkedin": "https://www.linkedin.com/in/ravitejarin/",
+              "github": "https://github.com/ravitejah",
+              "location": "Hyderabad, Telangana",
               "resume_path": "data/resume.pdf",
               "skills": [
-                  "Python", "SQL", "Apache Spark", "Apache Kafka", "Apache Airflow",
-                  "AWS Glue", "AWS EMR", "AWS S3", "AWS Redshift", "Databricks",
-                  "Snowflake", "dbt", "Hadoop", "Hive", "PostgreSQL", "MySQL",
-                  "MongoDB", "Docker", "Kubernetes", "Git", "PySpark",
-                  "Data Modeling", "ETL", "ELT", "Data Lakes", "Data Warehouses",
-                  "Streaming", "Batch Processing", "Grafana", "CloudWatch"
+                  "Java", "JavaScript", "TypeScript", "Spring Boot", 
+                  "Spring Data JPA", "Spring Security", "Angular", 
+                  "PostgreSQL", "MySQL", "Retool", "REST API", 
+                  "Microservices", "Backend Development", "Full Stack Development"
               ],
-              "education": "M.S. in Computer Science - University of South Florida (2024-2026)",
-              "experience_years": 1,
-              "summary": (
-                  "Aspiring Data Engineer pursuing M.S. in Computer Science with hands-on "
-                  "experience building scalable ETL/ELT pipelines and real-time data systems."
-              ),
+              "education": "BTech in Electrical and Electronics Engineering, 2024",
+              "experience_years": 1.5,
+              "summary": "Java Full Stack Developer with 1.5 years of experience building robust backend services with Spring Boot and developing internal dashboards using Retool and Angular. Targeting roles in the 10-16 LPA range."
           }
           SEARCH = {
-              "roles": ["Data Engineer","Junior Data Engineer","Entry Level Data Engineer","ETL Developer","Big Data Engineer"],
-              "locations": ["United States"],
+              "roles": [
+                  "SWE", "SWE 1", "SWE I", "SDE", "SDE 1", "SDE I",
+                  "Java Backend Engineer", "Java Backend Developer",
+                  "Java Full Stack Developer", "Junior Java Developer",
+                  "Java Developer", "Java Software Engineer"
+              ],
+              "locations": [
+                  "Hyderabad, Telangana",
+                  "Chennai, Tamil Nadu",
+                  "Visakhapatnam, Andhra Pradesh",
+                  "Bengaluru, Karnataka",
+                  "Remote"
+              ],
               "job_types": ["Full-time"],
               "experience_levels": ["Entry level", "Associate"],
-              "min_match_score": 65,
-              "auto_apply_min_score": 80,
-              "blacklist_companies": [],
-              "keywords_required": ["data engineer","data pipeline","etl","spark","aws"],
-              "keywords_excluded": ["senior","staff","principal","lead","10+ years","philippines","india","poland","spain","portugal","brazil","canada","uk","united kingdom","australia"],
+              "min_match_score": 85, 
+              "auto_apply_min_score": 0,
+              "keywords_required": ["java"],
+              "keywords_excluded": ["intern", "internship", "contract", "freelance", "senior", "sr", "lead", "architect", "manager", "principal", "staff", "ii", "iii", " 2", " 3", " 4"]
           }
           SCHEDULER = {
               "check_interval_minutes": 60,
