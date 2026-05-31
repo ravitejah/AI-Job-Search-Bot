@@ -184,7 +184,7 @@ Within each city, the freshest listings appear first. Match scores are colour-co
 
 ### Fork maintainer — Indian edition
 
-**Raviteja Ramisetti** — city-grouped email layout, responsive HTML email redesign, Indian market tuning (Hyderabad · Remote · Bangalore · Chennai · Visakhapatnam)
+**Raviteja Ramisetti** — strict 0–2.5 year experience bouncer, city-grouped email layout, responsive HTML email redesign, and Indian market tuning (Hyderabad · Remote · Bengaluru · Chennai · Visakhapatnam).
 
 - GitHub: [ravitejah](https://github.com/ravitejah)
 - LinkedIn: [ravitejarin](https://www.linkedin.com/in/ravitejarin/)
