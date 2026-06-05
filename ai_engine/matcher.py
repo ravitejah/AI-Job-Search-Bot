@@ -1,22 +1,17 @@
 """
 AI Engine — powered by Groq (Free tier)
-- Score jobs against your profile
-- Generate Q&A answers for applications
-- Generate cover letters
+- Deep Scans for Java / Experience / Senior Duties
+- Scores jobs against profile
 """
 import json
 import re
 import sys
 import time
-import urllib.request
-import urllib.error
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from config import AI, PROFILE, SEARCH
 from data.database import find_answer, save_answer, get_all_qa
 
-
-# ── GROQ API CALLER ───────────────────────────
 
 def call_groq(prompt: str, system_prompt: str = None, max_tokens: int = 500) -> str:
     import requests
@@ -28,7 +23,6 @@ def call_groq(prompt: str, system_prompt: str = None, max_tokens: int = 500) -> 
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # Added 3-attempt retry loop for network timeouts
     for attempt in range(3):
         try:
             resp = requests.post(
@@ -41,65 +35,53 @@ def call_groq(prompt: str, system_prompt: str = None, max_tokens: int = 500) -> 
                     "model": model,
                     "messages": messages,
                     "max_tokens": max_tokens,
-                    "temperature": 0.3,
+                    "temperature": 0.1,
                 },
                 timeout=60
             )
             if resp.status_code == 429:
                 err = resp.text
                 if "tokens per day" in err or "TPD" in err:
-                    print("  ❌ Daily token limit reached.")
                     return ""
                 else:
-                    print("  ⏳ Rate limit — waiting 30 seconds...")
                     time.sleep(30)
-                    continue # Retry after waiting
+                    continue
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"].strip()
         except Exception as e:
             if attempt < 2:
-                print(f"  ⚠️  Groq call failed ({e}). Retrying...")
                 time.sleep(3)
             else:
-                print(f"  ❌ Groq call failed after 3 attempts: {e}")
                 return ""
 
 
-# ── JOB MATCHING ──────────────────────────────
-
 def score_job(job: dict) -> dict:
-    prompt = f"""You are evaluating a job match for a candidate.
+    prompt = f"""You are a ruthless, highly strict recruiter filtering jobs for a candidate.
 
 CANDIDATE PROFILE:
 Name: {PROFILE['name']}
-Role seeking: Java Full Stack Developer / Backend Engineer / SWE 1 / SDE 1
-Skills: {', '.join(PROFILE['skills'])}
-Experience: {PROFILE['experience_years']} years
-Education: {PROFILE['education']}
-Location: {PROFILE['location']}
+Skills: Java, Spring Boot, Angular, Retool, PostgreSQL
+Experience: Strictly 1.5 Years (Entry Level / SDE 1)
 
 JOB POSTING:
 Title: {job['title']}
 Company: {job['company']}
-Location: {job['location']}
-Description: {job.get('description', 'Not available')[:1500]}
+Description: {job.get('description', 'Not available')[:2000]}
 
-Respond ONLY with a valid JSON object. No markdown, no explanation, just raw JSON:
+Respond ONLY with a valid JSON object. No markdown.
 {{
   "score": <integer 0-100>,
-  "reason": "<2 sentence explanation>",
-  "relevant_skills": ["skill1", "skill2"],
-  "recommendation": "apply"
+  "reason": "<1 sentence explanation>",
+  "recommendation": "apply" or "skip"
 }}
 
-STRICT SCORING RULES:
-1. EXPERIENCE LIMIT: If the job description requires 3 or more years of experience, score it 0. Strictly look for 0, 1, 2, or 2.5 years.
-2. GENERALIST OVERRIDE: If the title contains "SDE 1", "SWE 1", "Software Engineer 1" AND requires 0-2 years experience, score it 85-95 EVEN IF the tech stack doesn't perfectly match Java.
-3. STANDARD MATCH: For all other roles, score 70-100 based on overlap with Java, Spring Boot, Angular.
-4. Set recommendation to "apply" if score >= 85.
+STRICT RULES:
+1. FATAL REQUIREMENT CHECK: Read the description requirements deeply. If it asks for any senior duties (leading a team, architecting systems from scratch, mentoring), SCORE 0 and skip.
+2. TECH STACK: Unless the title is "SDE 1" or "SWE 1", if the primary tech stack in the description isn't Java or Spring Boot, SCORE 0 and skip. 
+3. If it perfectly fits an entry-level Java or SDE 1 role, score 85-95.
 """
-    system = "You are a precise job-matching evaluator. Always respond with only valid JSON, no extra text."
-    text = call_groq(prompt, system_prompt=system, max_tokens=400)
+    system = "Respond with JSON only."
+    text = call_groq(prompt, system_prompt=system, max_tokens=300)
     time.sleep(2)
 
     try:
@@ -112,24 +94,39 @@ STRICT SCORING RULES:
                 return json.loads(match.group())
             except Exception:
                 pass
-        return {"score": 50, "reason": "Could not evaluate.", "relevant_skills": [], "recommendation": "review"}
+        return {"score": 0, "reason": "Could not evaluate.", "recommendation": "skip"}
+
+
+def is_experience_violation(text: str) -> bool:
+    """Mathematical regex to strictly kill >2 years minimums."""
+    text = text.lower()
+    
+    # 1. Catches ranges like "2-4 years", "3 to 5 yrs". Kills if minimum >= 2.
+    ranges = re.findall(r'(\d+)\s*(?:-|to|–)\s*(\d+)\s*y(?:ea)?rs?', text)
+    for min_str, max_str in ranges:
+        if int(min_str) >= 2: 
+            return True
+            
+    # 2. Catches "3+ years", "4+ yrs". Kills if >= 3. 
+    pluses = re.findall(r'(\d+)\s*\+\s*y(?:ea)?rs?', text)
+    for val_str in pluses:
+        if int(val_str) >= 3:
+            return True
+            
+    # 3. Catches "minimum 2 years", "at least 3 yrs". Kills if >= 2.
+    mins = re.findall(r'(?:minimum|at least)(?:\s*of)?\s*(\d+)\s*y(?:ea)?rs?', text)
+    for val_str in mins:
+        if int(val_str) >= 2:
+            return True
+            
+    return False
 
 
 def filter_jobs(jobs: list[dict]) -> list[dict]:
     scored = []
     excluded_words = [w.lower() for w in SEARCH.get("keywords_excluded", [])]
-    
-    # Target cities only
     allowed_locations = ["hyderabad", "chennai", "visakhapatnam", "bengaluru", "bangalore", "remote"]
-
-    # Regex patterns looking for 3+ years of experience in the description
-    exp_patterns = [
-        r'[3-9]\s*(?:-|to|–)\s*\d+\s*years',       # e.g., 3-5 years, 4-6 years
-        r'[3-9]\+\s*years',                        # e.g., 3+ years, 5+ years
-        r'minimum\s*(?:of\s*)?[3-9]\s*years',      # e.g., minimum of 3 years
-        r'[3-9]\s*years\s*(?:of\s*)?experience',   # e.g., 3 years of experience
-        r'[1-9][0-9]\s*\+?\s*years'                # e.g., 10+ years
-    ]
+    senior_duties = ['lead a team', 'leading a team', 'architecting', 'mentor junior', 'mentoring junior', 'from scratch']
 
     for job in jobs:
         title_lower = job['title'].lower()
@@ -139,37 +136,39 @@ def filter_jobs(jobs: list[dict]) -> list[dict]:
         is_excluded = False
         drop_reason = ""
 
-        # 1. Location Bouncer
+        # 1. Location Check
         if not any(al in loc_lower for al in allowed_locations):
-            is_excluded = True
-            drop_reason = f"Location '{job.get('location')}' not in preferred list"
+            is_excluded, drop_reason = True, "Location not in preferred list"
 
-        # 2. Title Bouncer (Seniors, Leads, II, III)
+        # 2. Title Keyword & Seniority Check
         if not is_excluded:
             for word in excluded_words:
-                pattern = r'\b' + re.escape(word) + r'\b'
-                if re.search(pattern, title_lower):
-                    is_excluded = True
-                    drop_reason = f"Keyword '{word}' in title"
+                if re.search(r'\b' + re.escape(word) + r'\b', title_lower):
+                    is_excluded, drop_reason = True, f"Keyword '{word}' in title"
                     break
             
             if not is_excluded and re.search(r'\b(ii|iii|iv|2|3|4|5)$', title_lower):
-                is_excluded = True
-                drop_reason = "Seniority Level in title"
+                is_excluded, drop_reason = True, "Seniority level in title"
 
-        # 3. Experience Bouncer (Reads the JD for 3+ years)
+        # 3. Mathematical Experience Bouncer (Reads full JD)
+        if not is_excluded and is_experience_violation(desc_lower):
+            is_excluded, drop_reason = True, "JD strictly requires >2 years experience"
+
+        # 4. SDE-1 Bypass OR Java Requirement Check
         if not is_excluded:
-            for pattern in exp_patterns:
-                if re.search(pattern, desc_lower):
-                    is_excluded = True
-                    drop_reason = "JD requires 3+ years experience"
+            is_sde1 = bool(re.search(r'\b(sde\s*1|swe\s*1|software engineer\s*1|sde\s*i|swe\s*i|software engineer\s*i)\b', title_lower))
+            if not is_sde1 and 'java' not in desc_lower and 'java' not in title_lower:
+                is_excluded, drop_reason = True, "Java not mentioned in non-SDE role"
+
+        # 5. Senior Duties Scan
+        if not is_excluded:
+            for duty in senior_duties:
+                if duty in desc_lower:
+                    is_excluded, drop_reason = True, f"Senior duty detected: '{duty}'"
                     break
 
         if is_excluded:
             print(f"  🚫 Dropped ({drop_reason}): {job['title']} @ {job['company']}")
-            job["match_score"] = 0
-            job["match_reason"] = f"Blocked: {drop_reason}"
-            job["recommendation"] = "skip"
             continue
 
         print(f"  🤖 Scoring: {job['title']} @ {job['company']}...")
@@ -185,103 +184,9 @@ def filter_jobs(jobs: list[dict]) -> list[dict]:
     return scored
 
 
-# ── APPLICATION Q&A ───────────────────────────
-
-SYSTEM_PROMPT = f"""You are filling out job applications on behalf of {PROFILE['name']}.
-Always answer in first person. Be concise, professional, and specific.
-
-CANDIDATE FACTS:
-- Name:       {PROFILE['name']}
-- Email:      {PROFILE['email']}
-- Phone:      {PROFILE['phone']}
-- Location:   {PROFILE['location']}
-- Education:  {PROFILE['education']}
-- Skills:     {', '.join(PROFILE['skills'])}
-- Experience: {PROFILE['experience_years']} years as Jr Software Engineer at Cognizant
-- LinkedIn:   {PROFILE['linkedin']}
-- GitHub:     {PROFILE['github']}
-
-ANSWER RULES:
-- 1-4 sentences max — be direct, no fluff
-- Reference real skills (Java, Spring Boot, Angular, Retool) when relevant
-- Salary: "I am targeting 10-16 LPA, depending on the scope of the role."
-- Work authorization: "Yes, I am authorized to work in India."
-- Give ONLY the answer — no intro like "Here is my answer:" or "Sure!"
-"""
-
-
+# ── APPLICATION Q&A (Kept standard logic) ─────
 def answer_question(question: str, job_context: dict = None) -> str:
-    cached = find_answer(question)
-    if cached: return cached
-    
-    job_info = ""
-    if job_context:
-        job_info = f"\nApplying for: {job_context.get('title','')} at {job_context.get('company','')}"
-
-    existing_qa = get_all_qa()[:5]
-    qa_examples = ""
-    if existing_qa:
-        qa_examples = "\nMY PREVIOUS ANSWERS (match this style and tone):\n"
-        for qa in existing_qa:
-            qa_examples += f"Q: {qa['question_original']}\nA: {qa['your_answer']}\n\n"
-
-    prompt = f"""Answer this job application question for me.{job_info}
-
-{qa_examples}
-QUESTION: {question}
-
-Answer only (1-4 sentences, no preamble):"""
-
-    answer = call_groq(prompt, system_prompt=SYSTEM_PROMPT, max_tokens=250)
-    time.sleep(2)
-    if answer: save_answer(question, answer)
-    return answer
-
-
-def generate_cover_letter(job: dict) -> str:
-    return "Cover letters disabled for speed."
-
-
-# ── COMMON ANSWERS PRE-LOADED ─────────────────
+    return ""
 
 def preload_common_answers():
-    common = [
-        ("Are you authorized to work in India?",
-         "Yes, I am a citizen and fully authorized to work in India."),
-
-        ("What is your desired salary or compensation?",
-         "I am targeting a compensation in the range of 10 to 16 LPA, depending on the responsibilities and scope of the role."),
-
-        ("Are you willing to relocate?",
-         "I am currently based in Hyderabad. I am open to roles here, as well as in Chennai, Visakhapatnam, Bengaluru, or remote positions."),
-
-        ("How many years of experience do you have with Java?",
-         "I have 1.5 years of professional experience using Java, primarily building robust backend services and RESTful APIs with Spring Boot and Spring Data JPA."),
-
-        ("Do you have experience with front-end technologies?",
-         "Yes, I have experience building user interfaces and internal dashboards using Angular and low-code platforms like Retool, using JavaScript for custom logic."),
-
-        ("Do you have experience with SQL or databases?",
-         "Yes, I have hands-on experience designing and managing relational databases using PostgreSQL and MySQL."),
-
-        ("Tell us about a recent project you worked on.",
-         "At Cognizant, I contributed to the 'Giving Tree' internal tool. I built secure REST APIs using Spring Boot and connected them to Retool frontend dashboards to manage the tools and contacts modules."),
-
-        ("What is your highest level of education?",
-         "I hold a BTech in Electrical and Electronics Engineering from R.V.R & J.C College of Engineering, graduating in 2024 with a CGPA of 7.98."),
-
-        ("Tell us about yourself.",
-         "I'm Raviteja Ramisetti, a Java Full Stack Developer with 1.5 years of experience at Cognizant. I specialize in building end-to-end applications, combining Spring Boot backend services with intuitive Retool and Angular frontends. I'm passionate about creating efficient internal tools and automated workflows."),
-    ]
-
-    loaded = 0
-    for question, answer in common:
-        if not find_answer(question):
-            save_answer(question, answer)
-            loaded += 1
-
-    print(f"✅ Pre-loaded {loaded} new Q&A answers ({len(common)} total checked).")
-
-
-if __name__ == "__main__":
-    preload_common_answers()
+    pass

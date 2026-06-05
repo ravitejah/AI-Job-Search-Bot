@@ -1,5 +1,5 @@
 """
-Main Orchestrator — scrapes LinkedIn, Indeed, Glassdoor, Dice, Handshake, JobRight
+Main Orchestrator — scrapes LinkedIn, Glassdoor
 Pipeline: Scrape → Filter → Score → Email
 """
 import asyncio
@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
-# Safe import for SCHEDULER in case it's missing from config
 from config import SEARCH
 try:
     from config import SCHEDULER
@@ -18,11 +17,7 @@ except ImportError:
 
 from data.database import init_db, job_exists, job_exists_by_title_company, save_job, bulk_save_seen, get_stats
 from scrapers.linkedin_scraper  import run_linkedin_scraper
-from scrapers.jobright_scraper  import run_jobright_scraper
-from scrapers.indeed_scraper    import run_indeed_scraper
 from scrapers.glassdoor_scraper import run_glassdoor_scraper
-# from scrapers.dice_scraper      import run_dice_scraper
-# from scrapers.handshake_scraper import run_handshake_scraper
 from ai_engine.matcher import filter_jobs, preload_common_answers
 from notifier.notifications import notify_all
 from scrapers.recency_filter import apply_recency_filter
@@ -30,11 +25,7 @@ from scrapers.recency_filter import apply_recency_filter
 
 SCRAPERS = [
     ("LinkedIn",  run_linkedin_scraper),
-    ("Indeed",    run_indeed_scraper),
-    # ("Dice",      run_dice_scraper),
     ("Glassdoor", run_glassdoor_scraper),
-    # ("Handshake", run_handshake_scraper),
-    # ("JobRight",  run_jobright_scraper),
 ]
 
 
@@ -42,7 +33,7 @@ def print_banner():
     print("""
 ╔══════════════════════════════════════════════════════╗
 ║  🎯 JOB HUNTER — Multi-Platform Java Full Stack Bot  ║
-║  Sources: LinkedIn · Indeed · Glassdoor · JobRight   ║
+║  Sources: LinkedIn · Glassdoor                       ║
 ║  Built for: Raviteja Ramisetti                       ║
 ╚══════════════════════════════════════════════════════╝
     """)
@@ -92,12 +83,11 @@ async def run_pipeline():
         print("  ℹ️  No new jobs this run.")
         return
 
-    # Save ALL new jobs immediately so they're skipped next run
     bulk_save_seen(new_jobs)
     print(f"  💾 Saved {len(new_jobs)} jobs to DB")
 
     # ── Step 3: AI Scoring ────────────────────
-    print(f"\n🤖 Step 3: AI scoring {len(new_jobs)} new jobs...")
+    print(f"\n🤖 Step 3: Deep Scanning & AI scoring {len(new_jobs)} new jobs...")
     qualifying_jobs = filter_jobs(new_jobs)
     print(f"  Qualifying (score ≥ {SEARCH['min_match_score']}): {len(qualifying_jobs)}")
 
@@ -131,18 +121,14 @@ def run_scheduler():
     init_db()
     preload_common_answers()
     print(f"⏰ Scheduler started. Running every {SCHEDULER['check_interval_minutes']} minutes.")
-    print("   Press Ctrl+C to stop.\n")
-
+    
     while True:
         try:
             asyncio.run(run_pipeline())
         except KeyboardInterrupt:
-            print("\n👋 Scheduler stopped.")
             break
         except Exception as e:
             print(f"\n⚠️  Pipeline error: {e}")
-
-        print(f"\n⏳ Next run in {SCHEDULER['check_interval_minutes']} minutes...")
         time.sleep(interval)
 
 
@@ -156,8 +142,8 @@ def run_once():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Job Hunter Bot")
-    parser.add_argument("--once",     action="store_true", help="Run once and exit")
-    parser.add_argument("--schedule", action="store_true", help="Run on schedule")
+    parser.add_argument("--once",     action="store_true")
+    parser.add_argument("--schedule", action="store_true")
     args = parser.parse_args()
 
     if args.once:

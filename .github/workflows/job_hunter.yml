@@ -2,8 +2,8 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    # 9:00 AM IST (3:30 UTC) EVERY DAY
-    - cron: '30 3 * * *'
+    # Runs at a random offset (9:17 AM IST) to skip GitHub queue delays
+    - cron: '47 3 * * *'
   workflow_dispatch:
 
 jobs:
