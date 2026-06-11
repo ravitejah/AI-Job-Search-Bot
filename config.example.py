@@ -1,54 +1,95 @@
 """
-config.example.py — Copy this to config.py and fill in your details.
-DO NOT commit config.py to GitHub (it contains your API keys).
+Copy this file to config.py and fill in your details.
+Do not commit config.py; it contains credentials and personal data.
 """
 
 PROFILE = {
     "name": "Your Full Name",
     "email": "your@email.com",
-    "phone": "123-456-7890",
+    "phone": "",
     "linkedin": "https://www.linkedin.com/in/yourprofile/",
     "github": "https://github.com/yourusername",
-    "location": "City, State",
+    "location": "Hyderabad, Telangana",
     "resume_path": "data/resume.pdf",
     "skills": [
-        "Python", "SQL", "Apache Spark", "Apache Kafka", "Apache Airflow",
-        "AWS S3", "AWS Redshift", "AWS Glue", "Databricks", "Snowflake",
-        "dbt", "Docker", "PostgreSQL", "ETL", "Data Modeling",
+        "Java",
+        "Spring Boot",
+        "Angular",
+        "PostgreSQL",
+        "REST API",
+        "Microservices",
+        "Full Stack Development",
     ],
-    "education": "M.S. in Computer Science - Your University (Year)",
-    "experience_years": 1,
-    "summary": "Your professional summary here.",
+    "education": "Your degree and graduation year",
+    "experience_years": 1.5,
+    "summary": "Short profile summary used by the Groq matcher.",
 }
 
 SEARCH = {
+    "enabled_sources": ["LinkedIn", "Glassdoor"],
     "roles": [
-        "Data Engineer",
-        "Junior Data Engineer",
-        "Entry Level Data Engineer",
-        "ETL Developer",
-        "Big Data Engineer",
+        "SDE 1",
+        "SWE 1",
+        "Java Backend Developer",
+        "Java Full Stack Developer",
+        "Junior Java Developer",
+        "Java Software Engineer",
     ],
-    "locations": ["United States"],
+    "locations": [
+        "Hyderabad, Telangana",
+        "Chennai, Tamil Nadu",
+        "Visakhapatnam, Andhra Pradesh",
+        "Bengaluru, Karnataka",
+        "Remote",
+    ],
+    "glassdoor_location": "India",
     "job_types": ["Full-time"],
     "experience_levels": ["Entry level", "Associate"],
-    "min_match_score": 65,
-    "auto_apply_min_score": 80,
+    "min_match_score": 85,
+    "auto_apply_min_score": 0,
     "blacklist_companies": [],
-    "keywords_required": ["data engineer", "data pipeline", "etl"],
-    "keywords_excluded": ["senior", "staff", "principal", "lead", "10+ years"],
+    "keywords_required": ["java"],
+    "keywords_excluded": [
+        "intern",
+        "internship",
+        "contract",
+        "freelance",
+        "senior",
+        "sr",
+        "lead",
+        "architect",
+        "manager",
+        "principal",
+        "staff",
+    ],
+    "senior_duties": [
+        "lead a team",
+        "leading a team",
+        "team lead",
+        "architecting",
+        "architecture owner",
+        "mentor junior",
+        "mentoring junior",
+        "technical leadership",
+    ],
+    "max_required_experience_years": 2,
+    "freshness_hours": 24,
+    "include_unknown_dates": True,
+    "allow_unknown_locations": False,
+    "max_jobs_per_search": 25,
+    "score_delay_seconds": 1.0,
 }
 
 SCHEDULER = {
     "check_interval_minutes": 60,
-    "max_applies_per_day": 0,       # 0 = no auto-apply (recommended)
+    "max_applies_per_day": 0,
     "apply_delay_seconds": 45,
 }
 
 NOTIFICATIONS = {
     "email_enabled": True,
     "email_sender": "your@gmail.com",
-    "email_password": "YOUR_GMAIL_APP_PASSWORD",  # myaccount.google.com/apppasswords
+    "email_password": "YOUR_GMAIL_APP_PASSWORD",
     "email_recipient": "your@gmail.com",
     "telegram_enabled": False,
     "telegram_bot_token": "",
@@ -56,7 +97,7 @@ NOTIFICATIONS = {
 }
 
 AI = {
-    "groq_api_key": "YOUR_GROQ_API_KEY",    # Free at console.groq.com
+    "groq_api_key": "YOUR_GROQ_API_KEY",
     "model": "llama-3.1-8b-instant",
     "match_model": "llama-3.1-8b-instant",
 }

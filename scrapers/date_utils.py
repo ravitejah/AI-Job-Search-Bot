@@ -1,6 +1,5 @@
 """
-Shared date parsing utilities for all scrapers.
-Converts relative text ("2 days ago") or ISO strings to a standard datetime string.
+Shared date parsing utilities for scraper output.
 """
 from datetime import datetime, timedelta
 
@@ -9,53 +8,52 @@ def now_iso() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def _clean_text(text: str) -> str:
+    return " ".join((text or "").strip().lower().split())
+
+
+def parse_posted_datetime(text: str) -> datetime | None:
+    """Parse ISO or relative job-board time text into a naive datetime."""
+    cleaned = _clean_text(text)
+    if not cleaned:
+        return None
+
+    iso_candidate = cleaned.replace("z", "+00:00")
+    if "t" in iso_candidate or (len(cleaned) >= 10 and cleaned[4] == "-" and cleaned[7] == "-"):
+        try:
+            parsed = datetime.fromisoformat(iso_candidate)
+            return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+        except ValueError:
+            pass
+
+    now = datetime.now()
+
+    if any(token in cleaned for token in ("just posted", "just now", "today")):
+        return now
+    if cleaned in {"now", "new", "active"}:
+        return now
+
+    digits = "".join(ch for ch in cleaned if ch.isdigit())
+    amount = int(digits or 1)
+
+    if "hour" in cleaned or cleaned.endswith("h"):
+        return now - timedelta(hours=amount)
+    if "day" in cleaned or cleaned.endswith("d"):
+        return now - timedelta(days=amount)
+    if "week" in cleaned or cleaned.endswith("w"):
+        return now - timedelta(weeks=amount)
+    if "month" in cleaned:
+        return now - timedelta(days=amount * 30)
+
+    return None
+
+
 def relative_to_iso(text: str) -> str:
-    """
-    Convert relative date text to ISO datetime string.
-    Handles: 'just posted', 'today', '2 hours ago', '1 day ago',
-             '3 days ago', '1 week ago', 'posted 30+ days ago'
-    """
-    if not text:
-        return now_iso()
-
-    text = text.lower().strip()
-    now  = datetime.now()
-
-    if any(w in text for w in ["just", "today", "now", "active", "new"]):
-        return now_iso()
-    elif "hour" in text:
-        try:
-            n = int(''.join(filter(str.isdigit, text)) or 1)
-            return (now - timedelta(hours=n)).strftime("%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            return now_iso()
-    elif "day" in text:
-        try:
-            n = int(''.join(filter(str.isdigit, text)) or 1)
-            return (now - timedelta(days=n)).strftime("%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            return (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    elif "week" in text:
-        try:
-            n = int(''.join(filter(str.isdigit, text)) or 1)
-            return (now - timedelta(weeks=n)).strftime("%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            return (now - timedelta(weeks=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    elif "month" in text:
-        try:
-            n = int(''.join(filter(str.isdigit, text)) or 1)
-            return (now - timedelta(days=n * 30)).strftime("%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            return (now - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
-    else:
-        return now_iso()
+    """Convert relative date text to ISO, or return an empty string if unknown."""
+    dt = parse_posted_datetime(text)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S") if dt else ""
 
 
 def scrape_time_text(text: str) -> str:
-    """Auto-detect whether text is relative ('2 days ago') or already ISO, and return ISO."""
-    if not text:
-        return now_iso()
-    # Already an ISO datetime
-    if "T" in text or (len(text) == 10 and text[4] == "-"):
-        return text
+    """Normalize scraper time text to ISO, or return an empty string if unknown."""
     return relative_to_iso(text)

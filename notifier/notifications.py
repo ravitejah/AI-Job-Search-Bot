@@ -4,25 +4,33 @@ Sends beautifully formatted HTML email grouped by platform.
 Jobs sorted by most recent first, with human-readable posted time.
 """
 import smtplib
-import json
-import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime, timezone
+from datetime import datetime
 from collections import defaultdict
+from html import escape
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 from config import NOTIFICATIONS
+from scrapers.date_utils import parse_posted_datetime
+
+
+def html_escape(value) -> str:
+    return escape(str(value or ""), quote=True)
+
+
+def safe_job_url(value) -> str:
+    url = str(value or "").strip()
+    if not url.startswith(("http://", "https://")):
+        return "#"
+    return html_escape(url)
+
 
 # Platform branding
 PLATFORM_META = {
     "LinkedIn":  {"color": "#0077B5", "icon": "in", "bg": "#E8F4FD"},
-    "Indeed":    {"color": "#2164F3", "icon": "In", "bg": "#EEF2FF"},
     "Glassdoor": {"color": "#0CAA41", "icon": "GD", "bg": "#EDFAF3"},
-    "Dice":      {"color": "#EB1C26", "icon": "DC", "bg": "#FEF2F2"},
-    "Handshake": {"color": "#E8543A", "icon": "HS", "bg": "#FFF3F0"},
-    "JobRight":  {"color": "#7C3AED", "icon": "JR", "bg": "#F5F3FF"},
 }
 
 
@@ -108,21 +116,26 @@ def build_city_rows(jobs: list[dict], color: str) -> str:
 
             reason = job.get("match_reason", "")
             reason = reason[:85] + "..." if len(reason) > 85 else reason
+            reason = html_escape(reason)
+            job_url = safe_job_url(job.get("url"))
+            job_title = html_escape(job.get("title", "Untitled role"))
+            job_company = html_escape(job.get("company", "Unknown"))
+            job_location = html_escape(job.get("location") or "India")
             recency_badge = get_recency_badge(job.get("posted_at", ""))
 
             rows += f"""
         <tr>
           <td style="padding:14px 18px;border-bottom:1px solid #f1f5f9;vertical-align:middle;">
-            <a href="{job['url']}" target="_blank"
+            <a href="{job_url}" target="_blank"
                style="color:{color};font-weight:700;font-size:14px;
                       text-decoration:none;display:block;margin-bottom:5px;
                       line-height:1.3;">
-              {job['title']}
+              {job_title}
             </a>
             <div style="color:#64748b;font-size:12px;margin-bottom:6px;line-height:1.5;">
-              <span style="font-weight:600;color:#374151;">🏢 {job['company']}</span>
+              <span style="font-weight:600;color:#374151;">🏢 {job_company}</span>
               <span style="color:#cbd5e1;margin:0 6px;">|</span>
-              <span>📍 {job.get('location') or 'India'}</span>
+              <span>📍 {job_location}</span>
             </div>
             <div style="margin-top:4px;">{recency_badge}</div>
           </td>
@@ -142,7 +155,7 @@ def build_city_rows(jobs: list[dict], color: str) -> str:
           </td>
           <td style="padding:14px 18px;border-bottom:1px solid #f1f5f9;
                      text-align:center;vertical-align:middle;">
-            <a href="{job['url']}" target="_blank"
+            <a href="{job_url}" target="_blank"
                style="background:{color};color:white;padding:7px 16px;
                       border-radius:8px;font-size:12px;font-weight:700;
                       text-decoration:none;white-space:nowrap;
@@ -157,21 +170,7 @@ def build_city_rows(jobs: list[dict], color: str) -> str:
 
 
 def parse_posted_time(posted_at: str) -> datetime | None:
-    if not posted_at:
-        return None
-    formats = [
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%SZ",
-        "%Y-%m-%dT%H:%M:%S.%fZ",
-        "%Y-%m-%d",
-    ]
-    for fmt in formats:
-        try:
-            return datetime.strptime(posted_at[:len(fmt)+2].strip("Z"), fmt.strip("Z"))
-        except ValueError:
-            continue
-    return None
+    return parse_posted_datetime(posted_at)
 
 
 def human_time(posted_at: str) -> tuple[str, int]:
@@ -295,6 +294,16 @@ def send_email_alert(jobs: list[dict]):
         return
 
     cfg = NOTIFICATIONS
+    if not cfg.get("email_enabled", True):
+        print("  Email notifications disabled in config.")
+        return
+
+    required_fields = ("email_sender", "email_password", "email_recipient")
+    missing = [field for field in required_fields if not cfg.get(field) or str(cfg.get(field)).startswith("YOUR_")]
+    if missing:
+        print(f"  Email skipped: missing notification config fields: {', '.join(missing)}")
+        return
+
     now = datetime.now().strftime("%B %d, %Y at %I:%M %p")
 
     all_sorted = sort_jobs_by_recency(jobs)

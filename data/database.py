@@ -3,8 +3,6 @@ Database Manager
 Handles: jobs seen, applications submitted, Q&A memory store
 """
 import sqlite3
-import json
-from datetime import datetime
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
@@ -103,7 +101,7 @@ def job_exists_by_title_company(title: str, company: str) -> bool:
     conn = get_connection()
     row = conn.execute(
         "SELECT 1 FROM jobs WHERE LOWER(title)=LOWER(?) AND LOWER(company)=LOWER(?)",
-        (title.strip(), company.strip())
+        ((title or "").strip(), (company or "").strip())
     ).fetchone()
     conn.close()
     return row is not None
@@ -151,18 +149,31 @@ def bulk_save_seen(jobs: list[dict]):
     conn.commit()
     conn.close()
 
-def save_job(job: dict):
+def save_job(job: dict, status: str = "qualified"):
+    """Insert or update a scored job without losing the original discovery time."""
     conn = get_connection()
     conn.execute("""
-        INSERT OR IGNORE INTO jobs
+        INSERT INTO jobs
         (id, title, company, location, job_type, description, url, source,
-         match_score, match_reason, posted_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         match_score, match_reason, posted_at, status)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(id) DO UPDATE SET
+            title=excluded.title,
+            company=excluded.company,
+            location=excluded.location,
+            job_type=excluded.job_type,
+            description=excluded.description,
+            url=excluded.url,
+            source=excluded.source,
+            match_score=excluded.match_score,
+            match_reason=excluded.match_reason,
+            posted_at=excluded.posted_at,
+            status=excluded.status
     """, (
         job["id"], job["title"], job["company"], job.get("location",""),
         job.get("job_type",""), job.get("description",""), job["url"],
         job["source"], job.get("match_score",0), job.get("match_reason",""),
-        job.get("posted_at","")
+        job.get("posted_at",""), job.get("status", status)
     ))
     conn.commit()
     conn.close()
@@ -195,6 +206,9 @@ def get_stats():
     stats = {
         "total_jobs": conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0],
         "new_jobs": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='new'").fetchone()[0],
+        "seen_jobs": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='seen'").fetchone()[0],
+        "qualified_jobs": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='qualified'").fetchone()[0],
+        "rejected_jobs": conn.execute("SELECT COUNT(*) FROM jobs WHERE status='rejected'").fetchone()[0],
         "applied": conn.execute("SELECT COUNT(*) FROM applications").fetchone()[0],
         "qa_answers": conn.execute("SELECT COUNT(*) FROM qa_memory").fetchone()[0],
         "today_applied": conn.execute(

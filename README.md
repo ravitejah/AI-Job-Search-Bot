@@ -1,197 +1,169 @@
-#  Job Search Bot — AI-Powered Job Search Automation
+# Job Search Bot
 
-<div align="center">
+AI-assisted job search automation for LinkedIn and Glassdoor.
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Playwright](https://img.shields.io/badge/Playwright-Scraping-45ba4b?style=for-the-badge&logo=playwright&logoColor=white)
-![Groq](https://img.shields.io/badge/Groq-AI_Scoring-F55036?style=for-the-badge)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Automated-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+The bot scrapes fresh listings, removes duplicates, filters out poor matches with deterministic rules, scores plausible jobs with Groq, stores the result in SQLite, and emails the strongest matches.
 
-**Scrapes LinkedIn, Indeed, Glassdoor and more — scores every listing against your resume using AI — then emails you only the jobs worth applying to.**
+## What It Does
 
-*Tuned for the Indian job market: Hyderabad · Remote · Bangalore · Chennai · Visakhapatnam*
+1. Scrapes LinkedIn and Glassdoor.
+2. Keeps only recent jobs, with configurable handling for unknown posting dates.
+3. Deduplicates by job ID and title/company.
+4. Saves every new listing as `seen`, then updates reviewed jobs to `qualified` or `rejected`.
+5. Uses config-driven rules before Groq scoring to reduce wasted API calls.
+6. Sends one grouped HTML email for qualifying jobs.
 
-</div>
+## Project Structure
 
----
-
-## What it does
-
-1. Scrapes job listings across multiple platforms on a schedule
-2. Deduplicates against a local SQLite database so you never see the same job twice
-3. Scores each listing against your resume using Groq AI and filters out weak matches
-4. Sends a single grouped email — organised by platform → city → freshness — with direct apply links
-
----
-
-## Project structure
-
-```
-ai-job-hunter/
-├── .github/workflows/
-│   └── job_hunter.yml        # GitHub Actions schedule
+```text
+ai-job-search-bot/
+├── .github/workflows/job_hunter.yml
 ├── ai_engine/
-│   └── matcher.py            # Groq AI scoring
-├── dashboard/
-│   └── cli.py                # Local CLI dashboard
+│   └── matcher.py
 ├── data/
-│   ├── database.py           # SQLite deduplication
-│   └── resume.pdf            # Your resume (not committed)
+│   └── database.py
 ├── notifier/
-│   └── notifications.py      # HTML email alerts
-├── scrapers/                 # One file per platform
-│   ├── linkedin_scraper.py
-│   ├── indeed_scraper.py
+│   └── notifications.py
+├── scrapers/
+│   ├── date_utils.py
 │   ├── glassdoor_scraper.py
-│   ├── dice_scraper.py
-│   ├── handshake_scraper.py
-│   └── jobright_scraper.py
+│   ├── linkedin_scraper.py
+│   └── recency_filter.py
 ├── config.example.py
-├── config.py                 # Your config (not committed)
 ├── main.py
 └── requirements.txt
 ```
 
----
-
-## Prerequisites
-
-- Python 3.10+
-- Git
-- A Gmail account with an [App Password](https://myaccount.google.com/apppasswords)
-- A free [Groq API key](https://console.groq.com)
-
----
-
 ## Setup
 
-### 1 — Clone and install
+Requirements:
+
+- Python 3.10+
+- A Groq API key
+- A Gmail app password if email notifications are enabled
+
+Install:
 
 ```bash
-git clone https://github.com/ravitejah/ai-job-hunter.git
-cd ai-job-hunter
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+venv\Scripts\activate
 pip install -r requirements.txt
 playwright install chromium
+copy config.example.py config.py
 ```
 
-### 2 — Configure
+Edit `config.py` with your profile, target roles, target locations, Groq key, and email credentials.
 
-```bash
-cp config.example.py config.py    # Windows: copy config.example.py config.py
-```
-
-Open `config.py` and fill in your name, skills, target roles, locations, email credentials, and Groq API key.
-
-### 3 — Add your resume
-
-Place your resume at:
-
-```
-data/resume.pdf
-```
-
-The AI scorer reads this file when evaluating each job.
-
-### 4 — Initialise the database
+Initialize the database:
 
 ```bash
 python data/database.py
 ```
 
----
-
-## Running locally
-
-| Command | What it does |
-|---|---|
-| `python main.py --once --no-apply` | One full scrape → score → email cycle |
-| `python main.py --schedule --no-apply` | Runs on a recurring schedule |
-| `python dashboard/cli.py` | Opens the local CLI dashboard |
-| `python ai_engine/matcher.py` | Tests the AI scoring engine in isolation |
-
----
-
-## GitHub Actions (free cloud automation)
-
-### 1 — Push to GitHub
+Run once:
 
 ```bash
-git init && git add .
-git commit -m "initial commit"
-git branch -M main
-git remote add origin YOUR_REPO_URL
-git push -u origin main
+python main.py --once
 ```
 
-### 2 — Add secrets
+Run continuously:
 
-Go to **Repository → Settings → Secrets and Variables → Actions** and add:
+```bash
+python main.py --schedule
+```
 
-| Secret | Value |
+## Configuration Notes
+
+Important `SEARCH` options:
+
+- `enabled_sources`: keep as `["LinkedIn", "Glassdoor"]`.
+- `roles`: search terms used by scrapers.
+- `locations`: preferred locations used by the matcher.
+- `keywords_required`: cheap prefilter before Groq scoring.
+- `keywords_excluded`: title words that should be rejected before Groq scoring.
+- `max_required_experience_years`: rejects jobs asking for too much experience.
+- `freshness_hours`: default `24`.
+- `include_unknown_dates`: keeps jobs when a site hides or changes the posted-date selector.
+- `max_jobs_per_search`: caps each role/location scrape.
+- `score_delay_seconds`: pause between Groq calls.
+
+## GitHub Actions
+
+The workflow runs on schedule and creates `config.py` at runtime.
+
+Required repository secrets:
+
+| Secret | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Your Groq API key |
-| `EMAIL_SENDER` | Your Gmail address |
-| `EMAIL_PASSWORD` | Your Gmail App Password |
-| `EMAIL_RECIPIENT` | Where to send alerts |
+| `GROQ_API_KEY` | Groq scoring |
+| `EMAIL_SENDER` | Gmail sender |
+| `EMAIL_PASSWORD` | Gmail app password |
+| `EMAIL_RECIPIENT` | Alert recipient |
 
-### 3 — Trigger
+Optional repository secret:
 
-Go to **Actions → Job Hunter Bot → Run workflow** for the first manual run. The schedule takes over from there.
+| Secret | Purpose |
+|---|---|
+| `PROFILE_PHONE` | Personal phone, kept out of the repo |
 
----
+Optional repository variables:
 
-## Keeping secrets safe
+| Variable | Example |
+|---|---|
+| `PROFILE_NAME` | `Your Name` |
+| `PROFILE_LINKEDIN` | `https://www.linkedin.com/in/yourprofile/` |
+| `PROFILE_GITHUB` | `https://github.com/yourusername` |
+| `PROFILE_LOCATION` | `Hyderabad, Telangana` |
+| `PROFILE_EDUCATION` | `BTech, 2024` |
+| `PROFILE_EXPERIENCE_YEARS` | `1.5` |
+| `PROFILE_SUMMARY` | `Java full stack developer targeting SDE 1 roles.` |
+| `PROFILE_SKILLS` | `Java, Spring Boot, Angular, PostgreSQL` |
+| `SEARCH_ROLES` | `SDE 1, Java Backend Developer, Java Full Stack Developer` |
+| `SEARCH_LOCATIONS` | `Hyderabad, Chennai, Bengaluru, Remote` |
+| `SEARCH_MIN_MATCH_SCORE` | `85` |
+| `SEARCH_MAX_EXPERIENCE_YEARS` | `2` |
+| `SEARCH_KEYWORDS_REQUIRED` | `java` |
+| `SEARCH_KEYWORDS_EXCLUDED` | `senior, lead, manager, architect` |
+| `SEARCH_FRESHNESS_HOURS` | `24` |
+| `GLASSDOOR_LOCATION` | `India` |
 
-Never commit `config.py`, `resume.pdf`, or `jobs.db`. They are already listed in `.gitignore`. Store all credentials in GitHub Secrets or environment variables — never hardcoded in source.
+## Safety
 
----
+Do not commit:
+
+- `config.py`
+- `data/resume.pdf`
+- `data/jobs.db`
+- `.env`
+- logs or local virtual environments
+
+These are covered by `.gitignore`.
 
 ## Troubleshooting
 
-**Playwright errors** → `playwright install chromium`
+Playwright browser missing:
 
-**Emails not arriving** → Check your Gmail App Password, confirm the recipient address, and look in spam.
-
-**GitHub Action failing** → Open Actions → the failed run → Logs. Usually a missing secret or a permissions issue on the repo.
-
----
-
-## How the email is organised
-
-Each alert groups jobs by platform, then by city in this fixed order:
-
-```
-Hyderabad → Remote → Bangalore → Chennai → Visakhapatnam → Other
+```bash
+playwright install chromium
 ```
 
-Within each city, the freshest listings appear first. Match scores are colour-coded: green ≥ 85 · amber ≥ 70 · red below 70.
+No jobs found:
 
----
+- Check scraper logs for `cards`, `missing`, `errors`, `no_date`, and `no_desc`.
+- Try fewer roles or broader locations.
+- LinkedIn and Glassdoor selectors can change, so zero cards usually means the page layout changed or the request was blocked.
 
-## Contributors
+Groq scoring stops:
 
-### Original author
+- The bot prefilters before Groq, but Groq still has rate limits.
+- If the daily token limit is reached, the matcher skips scoring instead of crashing.
 
-**Sri Krishna Sai Kota** — designed and built the core pipeline
+Email not sent:
 
-- GitHub: [KRISHNA-05-06](https://github.com/KRISHNA-05-06)
-- LinkedIn: [srikrishnasai](https://www.linkedin.com/in/srikrishnasai/)
-- Repo: [KRISHNA-05-06/ai-job-hunter](https://github.com/KRISHNA-05-06/ai-job-hunter)
-
----
-
-### Fork maintainer — Indian edition
-
-**Raviteja Ramisetti** — strict 0–2.5 year experience bouncer, city-grouped email layout, responsive HTML email redesign, and Indian market tuning (Hyderabad · Remote · Bengaluru · Chennai · Visakhapatnam).
-
-- GitHub: [ravitejah](https://github.com/ravitejah)
-- LinkedIn: [ravitejarin](https://www.linkedin.com/in/ravitejarin/)
-- Location: Hyderabad, Telangana
-
----
+- Confirm `email_enabled` is `True`.
+- Confirm Gmail app password credentials.
+- Check spam.
 
 ## License
 
-MIT — free to use, modify, and adapt for your own job search.
+MIT

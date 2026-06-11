@@ -1,8 +1,2 @@
 playwright>=1.40.0
-apscheduler>=3.10.0
 requests>=2.31.0
-
-# NOTE: No extra package needed for Gemini!
-# The ai_engine/matcher.py calls Gemini directly via Python's built-in
-# urllib — no SDK required. Just get your free key at:
-# https://aistudio.google.com/apikey

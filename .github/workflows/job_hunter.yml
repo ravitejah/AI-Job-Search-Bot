@@ -2,8 +2,8 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    # Runs at a random offset (9:17 AM IST) to skip GitHub queue delays
-    - cron: '47 3 * * *'
+    # 9:17 AM IST
+    - cron: "47 3 * * *"
   workflow_dispatch:
 
 jobs:
@@ -16,13 +16,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -36,93 +34,163 @@ jobs:
       - name: Install Playwright Chromium
         run: playwright install chromium --with-deps
 
-      - name: Create config.py from secrets
+      - name: Create runtime config.py
         env:
-          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
-          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_RECIPIENT: ${{ secrets.EMAIL_RECIPIENT }}
+          PROFILE_PHONE: ${{ secrets.PROFILE_PHONE }}
+          PROFILE_NAME: ${{ vars.PROFILE_NAME }}
+          PROFILE_LINKEDIN: ${{ vars.PROFILE_LINKEDIN }}
+          PROFILE_GITHUB: ${{ vars.PROFILE_GITHUB }}
+          PROFILE_LOCATION: ${{ vars.PROFILE_LOCATION }}
+          PROFILE_EDUCATION: ${{ vars.PROFILE_EDUCATION }}
+          PROFILE_EXPERIENCE_YEARS: ${{ vars.PROFILE_EXPERIENCE_YEARS }}
+          PROFILE_SUMMARY: ${{ vars.PROFILE_SUMMARY }}
+          PROFILE_SKILLS: ${{ vars.PROFILE_SKILLS }}
+          SEARCH_ROLES: ${{ vars.SEARCH_ROLES }}
+          SEARCH_LOCATIONS: ${{ vars.SEARCH_LOCATIONS }}
+          SEARCH_MIN_MATCH_SCORE: ${{ vars.SEARCH_MIN_MATCH_SCORE }}
+          SEARCH_MAX_EXPERIENCE_YEARS: ${{ vars.SEARCH_MAX_EXPERIENCE_YEARS }}
+          SEARCH_KEYWORDS_REQUIRED: ${{ vars.SEARCH_KEYWORDS_REQUIRED }}
+          SEARCH_KEYWORDS_EXCLUDED: ${{ vars.SEARCH_KEYWORDS_EXCLUDED }}
+          SEARCH_FRESHNESS_HOURS: ${{ vars.SEARCH_FRESHNESS_HOURS }}
+          GLASSDOOR_LOCATION: ${{ vars.GLASSDOOR_LOCATION }}
         run: |
-          cat > config.py << PYEOF
-          PROFILE = {
-              "name": "Raviteja Ramisetti",
-              "email": "$EMAIL_SENDER",
-              "phone": "+91 93471 34834",
-              "linkedin": "https://www.linkedin.com/in/ravitejarin/",
-              "github": "https://github.com/ravitejah",
-              "location": "Hyderabad, Telangana",
+          set -euo pipefail
+          : "${GROQ_API_KEY:?Missing GROQ_API_KEY secret}"
+          : "${EMAIL_SENDER:?Missing EMAIL_SENDER secret}"
+          : "${EMAIL_PASSWORD:?Missing EMAIL_PASSWORD secret}"
+          : "${EMAIL_RECIPIENT:?Missing EMAIL_RECIPIENT secret}"
+
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          def env(name, default=""):
+              return os.environ.get(name) or default
+
+          def csv_env(name, default):
+              raw = env(name)
+              if not raw:
+                  return default
+              return [item.strip() for item in raw.split(",") if item.strip()]
+
+          def float_env(name, default):
+              try:
+                  return float(env(name, str(default)))
+              except ValueError:
+                  return default
+
+          def int_env(name, default):
+              try:
+                  return int(env(name, str(default)))
+              except ValueError:
+                  return default
+
+          profile = {
+              "name": env("PROFILE_NAME", "Candidate"),
+              "email": env("EMAIL_SENDER"),
+              "phone": env("PROFILE_PHONE"),
+              "linkedin": env("PROFILE_LINKEDIN"),
+              "github": env("PROFILE_GITHUB"),
+              "location": env("PROFILE_LOCATION", "Hyderabad, Telangana"),
               "resume_path": "data/resume.pdf",
-              "skills": [
-                  "Java", "JavaScript", "TypeScript", "Spring Boot", 
-                  "Spring Data JPA", "Spring Security", "Angular", 
-                  "PostgreSQL", "MySQL", "Retool", "REST API", 
-                  "Microservices", "Backend Development", "Full Stack Development"
-              ],
-              "education": "BTech in Electrical and Electronics Engineering, 2024",
-              "experience_years": 1.5,
-              "summary": "Java Full Stack Developer with 1.5 years of experience building robust backend services with Spring Boot and developing internal dashboards using Retool and Angular. Targeting roles in the 10-16 LPA range."
+              "skills": csv_env("PROFILE_SKILLS", [
+                  "Java", "JavaScript", "TypeScript", "Spring Boot", "Angular",
+                  "PostgreSQL", "REST API", "Microservices", "Full Stack Development",
+              ]),
+              "education": env("PROFILE_EDUCATION"),
+              "experience_years": float_env("PROFILE_EXPERIENCE_YEARS", 1.5),
+              "summary": env(
+                  "PROFILE_SUMMARY",
+                  "Java full stack developer targeting entry-level and SDE 1 roles.",
+              ),
           }
-          SEARCH = {
-              "roles": [
-                  "SWE", "SWE 1", "SWE I", "SDE", "SDE 1", "SDE I",
-                  "Java Backend Engineer", "Java Backend Developer",
-                  "Java Full Stack Developer", "Junior Java Developer",
-                  "Java Developer", "Java Software Engineer"
-              ],
-              "locations": [
-                  "Hyderabad, Telangana",
-                  "Chennai, Tamil Nadu",
-                  "Visakhapatnam, Andhra Pradesh",
-                  "Bengaluru, Karnataka",
-                  "Remote"
-              ],
+
+          search = {
+              "enabled_sources": ["LinkedIn", "Glassdoor"],
+              "roles": csv_env("SEARCH_ROLES", [
+                  "SWE", "SWE 1", "SDE", "SDE 1",
+                  "Java Backend Developer", "Java Full Stack Developer",
+                  "Junior Java Developer", "Java Software Engineer",
+              ]),
+              "locations": csv_env("SEARCH_LOCATIONS", [
+                  "Hyderabad, Telangana", "Chennai, Tamil Nadu",
+                  "Visakhapatnam, Andhra Pradesh", "Bengaluru, Karnataka", "Remote",
+              ]),
+              "glassdoor_location": env("GLASSDOOR_LOCATION", "India"),
               "job_types": ["Full-time"],
               "experience_levels": ["Entry level", "Associate"],
-              "min_match_score": 85, 
+              "min_match_score": int_env("SEARCH_MIN_MATCH_SCORE", 85),
               "auto_apply_min_score": 0,
-              "keywords_required": ["java"],
-              "keywords_excluded": ["intern", "internship", "contract", "freelance", "senior", "sr", "lead", "architect", "manager", "principal", "staff", "ii", "iii", " 2", " 3", " 4"]
+              "blacklist_companies": [],
+              "keywords_required": csv_env("SEARCH_KEYWORDS_REQUIRED", ["java"]),
+              "keywords_excluded": csv_env("SEARCH_KEYWORDS_EXCLUDED", [
+                  "intern", "internship", "contract", "freelance", "senior", "sr",
+                  "lead", "architect", "manager", "principal", "staff",
+              ]),
+              "senior_duties": [
+                  "lead a team", "leading a team", "team lead", "architecting",
+                  "architecture owner", "mentor junior", "mentoring junior",
+                  "technical leadership",
+              ],
+              "max_required_experience_years": float_env("SEARCH_MAX_EXPERIENCE_YEARS", 2),
+              "freshness_hours": int_env("SEARCH_FRESHNESS_HOURS", 24),
+              "include_unknown_dates": True,
+              "allow_unknown_locations": False,
+              "max_jobs_per_search": 25,
+              "score_delay_seconds": 1.0,
           }
-          SCHEDULER = {
-              "check_interval_minutes": 60,
-              "max_applies_per_day": 0,
-              "apply_delay_seconds": 45,
-          }
-          NOTIFICATIONS = {
-              "email_enabled": True,
-              "email_sender":    "$EMAIL_SENDER",
-              "email_password":  "$EMAIL_PASSWORD",
-              "email_recipient": "$EMAIL_RECIPIENT",
-              "telegram_enabled": False,
-              "telegram_bot_token": "",
-              "telegram_chat_id": "",
-          }
-          AI = {
-              "groq_api_key": "$GROQ_API_KEY",
-              "model": "llama-3.1-8b-instant",
-              "match_model": "llama-3.1-8b-instant",
-          }
-          DATABASE = {
-              "path": "data/jobs.db",
-          }
-          PYEOF
 
-      - name: Restore jobs database
-        uses: actions/cache@v4
-        with:
-          path: data/jobs.db
-          key: jobs-db-${{ github.run_id }}
-          restore-keys: |
-            jobs-db-
+          config = {
+              "PROFILE": profile,
+              "SEARCH": search,
+              "SCHEDULER": {
+                  "check_interval_minutes": 60,
+                  "max_applies_per_day": 0,
+                  "apply_delay_seconds": 45,
+              },
+              "NOTIFICATIONS": {
+                  "email_enabled": True,
+                  "email_sender": env("EMAIL_SENDER"),
+                  "email_password": env("EMAIL_PASSWORD"),
+                  "email_recipient": env("EMAIL_RECIPIENT"),
+                  "telegram_enabled": False,
+                  "telegram_bot_token": "",
+                  "telegram_chat_id": "",
+              },
+              "AI": {
+                  "groq_api_key": env("GROQ_API_KEY"),
+                  "model": "llama-3.1-8b-instant",
+                  "match_model": "llama-3.1-8b-instant",
+              },
+              "DATABASE": {"path": "data/jobs.db"},
+          }
+
+          body = "\n\n".join(f"{key} = {value!r}" for key, value in config.items())
+          Path("config.py").write_text(body + "\n", encoding="utf-8")
+          PY
 
       - name: Create data directory
         run: mkdir -p data
+
+      - name: Restore jobs database
+        uses: actions/cache/restore@v4
+        with:
+          path: data/jobs.db
+          key: jobs-db-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            jobs-db-${{ github.ref_name }}-
+            jobs-db-
 
       - name: Run Job Hunter
         run: python main.py --once
 
       - name: Save jobs database
-        uses: actions/cache@v4
+        if: always() && hashFiles('data/jobs.db') != ''
+        uses: actions/cache/save@v4
         with:
           path: data/jobs.db
-          key: jobs-db-${{ github.run_id }}
+          key: jobs-db-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}

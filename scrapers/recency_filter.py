@@ -1,82 +1,112 @@
 """
-Recency Filter — strictly filters jobs to only those posted in the last 24 hours.
-Also filters out reposted jobs using title+company deduplication.
+Freshness and duplicate filtering for scraped jobs.
 """
 from datetime import datetime, timedelta
-from scrapers.date_utils import scrape_time_text
+
+from scrapers.date_utils import parse_posted_datetime
+
+try:
+    from config import SEARCH
+except ImportError:
+    SEARCH = {}
+
+
+def _freshness_hours() -> int:
+    return int(SEARCH.get("freshness_hours", 24))
+
+
+def _include_unknown_dates() -> bool:
+    return bool(SEARCH.get("include_unknown_dates", True))
 
 
 def is_within_24_hours(posted_at: str) -> bool:
-    """Return True if job was posted within the last 24 hours."""
-    if not posted_at:
-        # No date info — be lenient, include it (better to show than miss)
-        return True
+    """Backward-compatible wrapper for callers that expect a 24-hour check."""
+    dt = parse_posted_datetime(posted_at)
+    if not dt:
+        return _include_unknown_dates()
+    return dt >= datetime.now() - timedelta(hours=24)
 
-    try:
-        # Normalize to datetime
-        iso = scrape_time_text(posted_at)
-        dt  = datetime.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S")
-        cutoff = datetime.now() - timedelta(hours=24)
-        return dt >= cutoff
-    except Exception:
-        return True  # Parse error — include to be safe
+
+def _is_fresh(job: dict, hours: int, include_unknown: bool) -> tuple[bool, str]:
+    dt = parse_posted_datetime(job.get("posted_at", ""))
+    if not dt:
+        job["posted_at_missing"] = True
+        return include_unknown, "unknown"
+
+    job["posted_at_missing"] = False
+    cutoff = datetime.now() - timedelta(hours=hours)
+    return dt >= cutoff, "fresh" if dt >= cutoff else "old"
+
+
+def _job_key(job: dict) -> tuple[str, str]:
+    return (
+        (job.get("title") or "").lower().strip(),
+        (job.get("company") or "").lower().strip(),
+    )
+
+
+def _posted_sort_value(job: dict) -> datetime:
+    return parse_posted_datetime(job.get("posted_at", "")) or datetime.min
 
 
 def deduplicate_by_title_company(jobs: list[dict]) -> list[dict]:
     """
-    Remove reposted duplicates — same title + company = same job.
-    Keeps the most recently posted one.
+    Remove reposted duplicates by title + company.
+    Keeps the copy with the most recent parsed posting time.
     """
-    seen = {}
+    seen: dict[tuple[str, str], dict] = {}
     for job in jobs:
-        key = (
-            job["title"].lower().strip(),
-            job["company"].lower().strip(),
-        )
+        key = _job_key(job)
         if key not in seen:
             seen[key] = job
-        else:
-            # Keep whichever was posted more recently
-            existing_posted = seen[key].get("posted_at", "")
-            new_posted      = job.get("posted_at", "")
-            if new_posted and new_posted > existing_posted:
-                seen[key] = job
+            continue
+
+        if _posted_sort_value(job) > _posted_sort_value(seen[key]):
+            seen[key] = job
 
     return list(seen.values())
 
 
 def apply_recency_filter(jobs: list[dict], strict: bool = True) -> list[dict]:
     """
-    Apply all freshness filters:
-    1. Remove jobs older than 24 hours (if strict=True)
-    2. Remove reposted duplicates (same title+company)
-    3. Sort by most recent first
+    Apply freshness filters, remove reposted duplicates, and sort newest first.
+    Unknown dates are included by default but counted in the log.
     """
     original_count = len(jobs)
+    hours = _freshness_hours()
+    include_unknown = _include_unknown_dates()
 
-    # Step 1 — 24-hour filter
     if strict:
-        fresh = [j for j in jobs if is_within_24_hours(j.get("posted_at", ""))]
-        removed_old = original_count - len(fresh)
-        if removed_old > 0:
-            print(f"  🕐 Removed {removed_old} jobs older than 24 hours")
+        fresh = []
+        removed_old = 0
+        kept_unknown = 0
+        removed_unknown = 0
+
+        for job in jobs:
+            keep, reason = _is_fresh(job, hours, include_unknown)
+            if keep:
+                fresh.append(job)
+                if reason == "unknown":
+                    kept_unknown += 1
+            elif reason == "unknown":
+                removed_unknown += 1
+            else:
+                removed_old += 1
+
+        if removed_old:
+            print(f"  Removed {removed_old} jobs older than {hours} hours")
+        if kept_unknown:
+            print(f"  Kept {kept_unknown} jobs with unknown posting time")
+        if removed_unknown:
+            print(f"  Removed {removed_unknown} jobs with unknown posting time")
     else:
         fresh = jobs
 
-    # Step 2 — Remove reposted duplicates across platforms
     deduped = deduplicate_by_title_company(fresh)
     removed_dupes = len(fresh) - len(deduped)
-    if removed_dupes > 0:
-        print(f"  🔁 Removed {removed_dupes} reposted duplicates (same title+company)")
+    if removed_dupes:
+        print(f"  Removed {removed_dupes} reposted duplicates (same title+company)")
 
-    # Step 3 — Sort newest first
-    def sort_key(job):
-        try:
-            iso = scrape_time_text(job.get("posted_at", ""))
-            return datetime.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            return datetime.min
-    deduped.sort(key=sort_key, reverse=True)
-
-    print(f"  ✅ After freshness filter: {len(deduped)} jobs (from {original_count})")
+    deduped.sort(key=_posted_sort_value, reverse=True)
+    print(f"  After freshness filter: {len(deduped)} jobs (from {original_count})")
     return deduped
