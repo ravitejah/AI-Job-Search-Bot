@@ -19,14 +19,6 @@ def _include_unknown_dates() -> bool:
     return bool(SEARCH.get("include_unknown_dates", True))
 
 
-def is_within_24_hours(posted_at: str) -> bool:
-    """Backward-compatible wrapper for callers that expect a 24-hour check."""
-    dt = parse_posted_datetime(posted_at)
-    if not dt:
-        return _include_unknown_dates()
-    return dt >= datetime.now() - timedelta(hours=24)
-
-
 def _is_fresh(job: dict, hours: int, include_unknown: bool) -> tuple[bool, str]:
     dt = parse_posted_datetime(job.get("posted_at", ""))
     if not dt:

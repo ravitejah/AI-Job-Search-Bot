@@ -6,6 +6,9 @@ apply_bot/auto_apply.py
 data/resume.pdf
 data/jobs.db
 data/*.db
+# SQLite WAL-mode sidecar files (created automatically when journal_mode=WAL)
+data/*.db-wal
+data/*.db-shm
 
 # ─── Python ───
 venv/

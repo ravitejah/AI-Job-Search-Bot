@@ -36,6 +36,8 @@ def parse_posted_datetime(text: str) -> datetime | None:
     digits = "".join(ch for ch in cleaned if ch.isdigit())
     amount = int(digits or 1)
 
+    if "minute" in cleaned or "min" in cleaned or cleaned.endswith("m"):
+        return now - timedelta(minutes=amount)
     if "hour" in cleaned or cleaned.endswith("h"):
         return now - timedelta(hours=amount)
     if "day" in cleaned or cleaned.endswith("d"):

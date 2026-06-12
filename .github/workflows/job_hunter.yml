@@ -2,8 +2,8 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    # 9:17 AM IST
-    - cron: "47 3 * * *"
+    - cron: "30 3 * * *"    # 9:00 AM IST — catch overnight postings
+    - cron: "30 12 * * *"   # 6:00 PM IST — catch afternoon postings
   workflow_dispatch:
 
 jobs:

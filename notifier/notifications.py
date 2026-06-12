@@ -12,7 +12,7 @@ from html import escape
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
-from config import NOTIFICATIONS
+from config import NOTIFICATIONS, PROFILE
 from scrapers.date_utils import parse_posted_datetime
 
 
@@ -46,6 +46,16 @@ CITY_ORDER = [
     ("Other",         []),   # catch-all — always last
 ]
 
+CITY_ICONS = {
+    "Hyderabad":     "🏙️",
+    "Remote":        "🌐",
+    "Bangalore":     "🌆",
+    "Chennai":       "🌇",
+    "Visakhapatnam": "🌊",
+    "Other":         "📍",
+}
+
+
 def resolve_city(location: str) -> str:
     """Map a raw job location string to a short city label."""
     if not location or location.strip().lower() in ("india", ""):
@@ -77,15 +87,7 @@ def build_city_rows(jobs: list[dict], color: str) -> str:
             continue
 
         # City sub-header row
-        city_icons = {
-            "Hyderabad":     "🏙️",
-            "Remote":        "🌐",
-            "Bangalore":     "🌆",
-            "Chennai":       "🌇",
-            "Visakhapatnam": "🌊",
-            "Other":         "📍",
-        }
-        icon = city_icons.get(label, "📍")
+        icon = CITY_ICONS.get(label, "📍")
         rows += f"""
         <tr>
           <td colspan="4"
@@ -189,18 +191,14 @@ def human_time(posted_at: str) -> tuple[str, int]:
         return "Just posted", 0
     elif minutes < 60:
         label = "Just now" if minutes < 2 else f"{minutes}m ago"
-        color = "#16a34a" 
-    elif minutes < 1440: 
+    elif minutes < 1440:
         hours = minutes // 60
         label = f"{hours}h ago"
-        color = "#16a34a" if hours < 6 else "#d97706"
-    elif minutes < 2880: 
+    elif minutes < 2880:
         label = "Yesterday"
-        color = "#d97706" 
     else:
         days = minutes // 1440
         label = f"{days} days ago"
-        color = "#dc2626" 
 
     return label, minutes
 
@@ -215,15 +213,11 @@ def sort_jobs_by_recency(jobs: list[dict]) -> list[dict]:
 def get_recency_badge(posted_at: str) -> str:
     label, minutes = human_time(posted_at)
 
-    if minutes < 60:
+    if minutes < 360:       # under 6 hours — green
         bg = "#dcfce7"; color = "#16a34a"; dot = "🟢"
-    elif minutes < 360:
-        bg = "#dcfce7"; color = "#16a34a"; dot = "🟢"
-    elif minutes < 1440: 
+    elif minutes < 2880:    # 6 hours to 2 days — yellow
         bg = "#fef3c7"; color = "#d97706"; dot = "🟡"
-    elif minutes < 2880: 
-        bg = "#fef3c7"; color = "#d97706"; dot = "🟡"
-    else:
+    else:                   # older than 2 days — red
         bg = "#fee2e2"; color = "#dc2626"; dot = "🔴"
 
     return (
@@ -506,7 +500,7 @@ def send_email_alert(jobs: list[dict]):
     <div style="margin-bottom:6px;">
       <span style="font-weight:700;color:#64748b;">Job Search Bot</span>
       &nbsp;·&nbsp; Sorted newest first
-      &nbsp;·&nbsp; Built for Raviteja Ramisetti
+      &nbsp;·&nbsp; Built for {html_escape(PROFILE.get('name', 'You'))}
     </div>
     <div style="color:#cbd5e1;font-style:italic;">
       Apply while the listing is fresh — early applicants get noticed first 🚀
@@ -518,7 +512,7 @@ def send_email_alert(jobs: list[dict]):
 </html>"""
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f" {len(jobs)} New Software Engineer Jobs — {', '.join(p for p, _ in sorted_platforms)}"
+    msg["Subject"] = f"{len(jobs)} New Software Engineer Jobs — {', '.join(p for p, _ in sorted_platforms)}"
     msg["From"]    = cfg["email_sender"]
     msg["To"]      = cfg["email_recipient"]
     msg.attach(MIMEText(html, "html"))

@@ -6,12 +6,13 @@ The bot scrapes fresh listings, removes duplicates, filters out poor matches wit
 
 ## What It Does
 
-1. Scrapes LinkedIn and Glassdoor.
-2. Keeps only recent jobs, with configurable handling for unknown posting dates.
-3. Deduplicates by job ID and title/company.
-4. Saves every new listing as `seen`, then updates reviewed jobs to `qualified` or `rejected`.
-5. Uses config-driven rules before Groq scoring to reduce wasted API calls.
-6. Sends one grouped HTML email for qualifying jobs.
+The pipeline runs in five stages:
+
+1. **Stage 1 — Concurrent shallow scrape.** LinkedIn and Glassdoor run simultaneously. Only card metadata (title, company, location, URL, posted date) is collected — no job descriptions yet.
+2. **Stage 2 — Filter.** Freshness filter (default 24 h), DB deduplication (two batch queries), and a fast deterministic title/keyword pre-filter run before any browser description fetches.
+3. **Stage 3 — Targeted deep fetch.** Descriptions are fetched only for the ~30–40 candidates that survived Stage 2, using bounded concurrency (3 pages at a time).
+4. **Stage 4 — AI scoring.** Each candidate is scored by Groq. Jobs are saved to the DB incrementally so a crash loses no work.
+5. **Stage 5 — Email notification.** One grouped HTML email with match scores, freshness badges, and direct apply links.
 
 ## Project Structure
 
@@ -66,10 +67,16 @@ Run once:
 python main.py --once
 ```
 
-Run continuously:
+Run continuously on a fixed interval:
 
 ```bash
 python main.py --schedule
+```
+
+Dry run (full pipeline, no DB writes, no email — safe for testing):
+
+```bash
+python main.py --once --dry-run
 ```
 
 ## Configuration Notes
