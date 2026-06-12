@@ -424,7 +424,7 @@ HARD RULES (non-negotiable):
 1. Required experience >= {max_years:g} years anywhere in description → score 0, recommendation "skip".
 2. Senior duties (team lead, architect, mentoring juniors, etc.) → score 0, recommendation "skip".
 3. Required skills completely absent from both title and description → score 0, recommendation "skip".
-4. Score >= {SEARCH.get('min_match_score', 85)} only for clear matches on role, skills, location, and experience level.
+4. Score >= {SEARCH.get('min_match_score', 70)} only for clear matches on role, skills, location, and experience level.
 5. If description is unavailable, score conservatively from title and company alone.
 """
     result_text = call_groq(
