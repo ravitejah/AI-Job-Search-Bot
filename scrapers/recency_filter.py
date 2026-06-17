@@ -12,7 +12,7 @@ except ImportError:
 
 
 def _freshness_hours() -> int:
-    return int(SEARCH.get("freshness_hours", 24))
+    return int(SEARCH.get("freshness_hours", 48))
 
 
 def _include_unknown_dates() -> bool:
@@ -22,10 +22,8 @@ def _include_unknown_dates() -> bool:
 def _is_fresh(job: dict, hours: int, include_unknown: bool) -> tuple[bool, str]:
     dt = parse_posted_datetime(job.get("posted_at", ""))
     if not dt:
-        job["posted_at_missing"] = True
         return include_unknown, "unknown"
 
-    job["posted_at_missing"] = False
     cutoff = datetime.now() - timedelta(hours=hours)
     return dt >= cutoff, "fresh" if dt >= cutoff else "old"
 

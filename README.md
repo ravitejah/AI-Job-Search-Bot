@@ -9,7 +9,7 @@ The bot scrapes fresh listings, removes duplicates, filters out poor matches wit
 The pipeline runs in five stages:
 
 1. **Stage 1 — Concurrent shallow scrape.** LinkedIn and Glassdoor run simultaneously. Only card metadata (title, company, location, URL, posted date) is collected — no job descriptions yet.
-2. **Stage 2 — Filter.** Freshness filter (default 24 h), DB deduplication (two batch queries), and a fast deterministic title/keyword pre-filter run before any browser description fetches.
+2. **Stage 2 — Filter.** Freshness filter (default 48 h), DB deduplication (two batch queries), and a fast deterministic title/keyword pre-filter run before any browser description fetches.
 3. **Stage 3 — Targeted deep fetch.** Descriptions are fetched only for the ~30–40 candidates that survived Stage 2, using bounded concurrency (3 pages at a time).
 4. **Stage 4 — AI scoring.** Each candidate is scored by Groq. Jobs are saved to the DB incrementally so a crash loses no work.
 5. **Stage 5 — Email notification.** One grouped HTML email with match scores, freshness badges, and direct apply links.
@@ -26,6 +26,7 @@ ai-job-search-bot/
 ├── notifier/
 │   └── notifications.py
 ├── scrapers/
+│   ├── browser_utils.py
 │   ├── date_utils.py
 │   ├── glassdoor_scraper.py
 │   ├── linkedin_scraper.py
@@ -39,7 +40,7 @@ ai-job-search-bot/
 
 Requirements:
 
-- Python 3.10+
+- Python 3.11+
 - A Groq API key
 - A Gmail app password if email notifications are enabled
 
@@ -89,7 +90,7 @@ Important `SEARCH` options:
 - `keywords_required`: cheap prefilter before Groq scoring.
 - `keywords_excluded`: title words that should be rejected before Groq scoring.
 - `max_required_experience_years`: rejects jobs asking for too much experience.
-- `freshness_hours`: default `24`.
+- `freshness_hours`: default `48`. Jobs older than this are dropped before deep fetch.
 - `include_unknown_dates`: keeps jobs when a site hides or changes the posted-date selector.
 - `max_jobs_per_search`: caps each role/location scrape.
 - `score_delay_seconds`: pause between Groq calls.
@@ -127,11 +128,11 @@ Optional repository variables:
 | `PROFILE_SKILLS` | `Java, Spring Boot, Angular, PostgreSQL` |
 | `SEARCH_ROLES` | `SDE 1, Java Backend Developer, Java Full Stack Developer` |
 | `SEARCH_LOCATIONS` | `Hyderabad, Chennai, Bengaluru, Remote` |
-| `SEARCH_MIN_MATCH_SCORE` | `85` |
+| `SEARCH_MIN_MATCH_SCORE` | `75` |
 | `SEARCH_MAX_EXPERIENCE_YEARS` | `2` |
 | `SEARCH_KEYWORDS_REQUIRED` | `java` |
 | `SEARCH_KEYWORDS_EXCLUDED` | `senior, lead, manager, architect` |
-| `SEARCH_FRESHNESS_HOURS` | `24` |
+| `SEARCH_FRESHNESS_HOURS` | `48` |
 | `GLASSDOOR_LOCATION` | `India` |
 
 ## Safety

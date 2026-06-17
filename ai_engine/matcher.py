@@ -36,7 +36,8 @@ DEFAULT_SENIOR_DUTIES = [
 
 EARLY_CAREER_TITLE_RE = re.compile(
     r"\b(sde\s*1|swe\s*1|software engineer\s*1|sde\s*i|swe\s*i|"
-    r"software engineer\s*i|junior|entry[-\s]?level|associate)\b",
+    r"software engineer\s*i|junior|entry[-\s]?level|associate|"
+    r"fresher|trainee)\b",
     re.IGNORECASE,
 )
 
@@ -114,7 +115,10 @@ def call_groq(prompt: str, system_prompt: str = None, max_tokens: int = 500) -> 
                     print("  AI skipped: Groq daily token limit reached.")
                     return ""
                 retry_after = resp.headers.get("retry-after", "")
-                wait_seconds = int(retry_after) if retry_after.isdigit() else 30
+                try:
+                    wait_seconds = int(float(retry_after)) if retry_after else 30
+                except (ValueError, TypeError):
+                    wait_seconds = 30
                 if attempt < 2:
                     print(f"  Groq rate limited. Retrying in {wait_seconds}s...")
                     time.sleep(wait_seconds)
@@ -274,7 +278,7 @@ def is_experience_violation(text: str, max_years: float = None) -> bool:
     return any(years >= limit for years in _extract_min_experience_years(text.lower()))
 
 
-def _clean_description(text: str, max_chars: int = 3000) -> str:
+def _clean_description(text: str, max_chars: int = 2000) -> str:
     """
     Strip boilerplate footer lines and collapse excess blank lines before
     sending to Groq. Reduces token usage and improves signal quality.
@@ -424,7 +428,7 @@ HARD RULES (non-negotiable):
 1. Required experience >= {max_years:g} years anywhere in description → score 0, recommendation "skip".
 2. Senior duties (team lead, architect, mentoring juniors, etc.) → score 0, recommendation "skip".
 3. Required skills completely absent from both title and description → score 0, recommendation "skip".
-4. Score >= {SEARCH.get('min_match_score', 70)} only for clear matches on role, skills, location, and experience level.
+4. Score >= {SEARCH.get('min_match_score', 75)} only for clear matches on role, skills, location, and experience level.
 5. If description is unavailable, score conservatively from title and company alone.
 """
     result_text = call_groq(
@@ -487,7 +491,7 @@ def filter_jobs(jobs: list) -> list:
         if str(d).strip()
     ]
     max_years = _max_experience_years()
-    min_score = SEARCH.get("min_match_score", 85)
+    min_score = SEARCH.get("min_match_score", 75)
     scored = []
 
     for job in jobs:
@@ -519,8 +523,3 @@ def filter_jobs(jobs: list) -> list:
 
 def preload_common_answers() -> None:
     """Stub — reserved for future Q&A preloading."""
-
-
-def answer_question(question: str, job_context: dict = None) -> str:
-    """Stub — reserved for future interactive Q&A answering."""
-    return ""

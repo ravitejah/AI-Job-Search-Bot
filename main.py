@@ -30,7 +30,7 @@ import asyncio
 import time
 import traceback
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from ai_engine.matcher import pre_filter_jobs, preload_common_answers, score_job
 from config import PROFILE, SEARCH
@@ -47,6 +47,8 @@ from notifier.notifications import notify_all
 from scrapers.glassdoor_scraper import fetch_glassdoor_descriptions, run_glassdoor_scraper
 from scrapers.linkedin_scraper import fetch_linkedin_descriptions, run_linkedin_scraper
 from scrapers.recency_filter import apply_recency_filter
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 try:
     from config import SCHEDULER
@@ -88,7 +90,7 @@ def _divider(label: str = "") -> None:
 
 
 async def run_pipeline(dry_run: bool = False):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST")
     t_start = time.time()
     print(f"\n{'=' * 54}")
     print(f"  Pipeline started: {now}")
@@ -221,7 +223,7 @@ async def run_pipeline(dry_run: bool = False):
     # ─────────────────────────────────────────────────────────
     _divider(f"Stage 4 — AI scoring ({len(pre_filtered)} jobs via Groq)")
     qualifying: list = []
-    min_score = int(SEARCH.get("min_match_score", 85))
+    min_score = int(SEARCH.get("min_match_score", 75))
 
     for i, job in enumerate(pre_filtered, 1):
         title_short = job["title"][:45] if len(job["title"]) > 45 else job["title"]
@@ -259,12 +261,12 @@ async def run_pipeline(dry_run: bool = False):
     # Cross-source dedup — the same job posted on both LinkedIn and Glassdoor
     # would otherwise appear twice in the email. Keep the higher-scored version.
     if len(qualifying) > 1:
-        seen_tc: dict = {}
+        cross_seen: dict = {}
         deduped: list = []
         for job in sorted(qualifying, key=lambda j: j["match_score"], reverse=True):
             key = (job["title"].lower().strip(), job["company"].lower().strip())
-            if key not in seen_tc:
-                seen_tc[key] = True
+            if key not in cross_seen:
+                cross_seen[key] = True
                 deduped.append(job)
         removed = len(qualifying) - len(deduped)
         if removed:
@@ -316,11 +318,11 @@ def run_once(dry_run: bool = False):
 
 
 def run_scheduler(dry_run: bool = False):
-    interval = int(SCHEDULER["check_interval_minutes"]) * 60
+    interval = int(SCHEDULER.get("check_interval_minutes", 60)) * 60
     print_banner(dry_run)
     init_db()
     preload_common_answers()
-    print(f"Scheduler started. Running every {SCHEDULER['check_interval_minutes']} minutes.")
+    print(f"Scheduler started. Running every {SCHEDULER.get('check_interval_minutes', 60)} minutes.")
 
     while True:
         try:

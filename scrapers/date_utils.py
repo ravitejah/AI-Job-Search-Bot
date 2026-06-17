@@ -4,10 +4,6 @@ Shared date parsing utilities for scraper output.
 from datetime import datetime, timedelta
 
 
-def now_iso() -> str:
-    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-
 def _clean_text(text: str) -> str:
     return " ".join((text or "").strip().lower().split())
 
@@ -44,18 +40,13 @@ def parse_posted_datetime(text: str) -> datetime | None:
         return now - timedelta(days=amount)
     if "week" in cleaned or cleaned.endswith("w"):
         return now - timedelta(weeks=amount)
-    if "month" in cleaned:
+    if "month" in cleaned or cleaned.endswith("mo"):
         return now - timedelta(days=amount * 30)
 
     return None
 
 
-def relative_to_iso(text: str) -> str:
-    """Convert relative date text to ISO, or return an empty string if unknown."""
-    dt = parse_posted_datetime(text)
-    return dt.strftime("%Y-%m-%dT%H:%M:%S") if dt else ""
-
-
 def scrape_time_text(text: str) -> str:
     """Normalize scraper time text to ISO, or return an empty string if unknown."""
-    return relative_to_iso(text)
+    dt = parse_posted_datetime(text)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S") if dt else ""

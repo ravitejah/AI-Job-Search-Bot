@@ -2,14 +2,19 @@ name: Job Hunter Bot
 
 on:
   schedule:
-    - cron: "30 3 * * *"    # 9:00 AM IST — catch overnight postings
-    - cron: "30 12 * * *"   # 6:00 PM IST — catch afternoon postings
+    - cron: "47 1 * * *"    # 7:17 AM IST — overnight postings
+    - cron: "53 6 * * *"    # 12:23 PM IST — morning postings
+    - cron: "37 11 * * *"   # 5:07 PM IST — afternoon postings
+    - cron: "13 16 * * *"   # 9:43 PM IST — end-of-day postings
   workflow_dispatch:
 
 jobs:
   scrape-and-notify:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: write   # required for cache save/restore
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -30,6 +35,12 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
 
       - name: Install Playwright Chromium
         run: playwright install chromium --with-deps
@@ -123,7 +134,7 @@ jobs:
               "glassdoor_location": env("GLASSDOOR_LOCATION", "India"),
               "job_types": ["Full-time"],
               "experience_levels": ["Entry level", "Associate"],
-              "min_match_score": int_env("SEARCH_MIN_MATCH_SCORE", 85),
+              "min_match_score": int_env("SEARCH_MIN_MATCH_SCORE", 75),
               "auto_apply_min_score": 0,
               "blacklist_companies": [],
               "keywords_required": csv_env("SEARCH_KEYWORDS_REQUIRED", ["java"]),
@@ -137,7 +148,7 @@ jobs:
                   "technical leadership",
               ],
               "max_required_experience_years": float_env("SEARCH_MAX_EXPERIENCE_YEARS", 2),
-              "freshness_hours": int_env("SEARCH_FRESHNESS_HOURS", 24),
+              "freshness_hours": int_env("SEARCH_FRESHNESS_HOURS", 48),
               "include_unknown_dates": True,
               "allow_unknown_locations": False,
               "max_jobs_per_search": 25,

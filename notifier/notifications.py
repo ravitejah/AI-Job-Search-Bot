@@ -4,16 +4,19 @@ Sends beautifully formatted HTML email grouped by platform.
 Jobs sorted by most recent first, with human-readable posted time.
 """
 import smtplib
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
-from collections import defaultdict
 from html import escape
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parent.parent))
 from config import NOTIFICATIONS, PROFILE
 from scrapers.date_utils import parse_posted_datetime
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def html_escape(value) -> str:
@@ -171,12 +174,8 @@ def build_city_rows(jobs: list[dict], color: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def parse_posted_time(posted_at: str) -> datetime | None:
-    return parse_posted_datetime(posted_at)
-
-
 def human_time(posted_at: str) -> tuple[str, int]:
-    dt = parse_posted_time(posted_at)
+    dt = parse_posted_datetime(posted_at)
     if not dt:
         return "Recently posted", 99999
 
@@ -298,7 +297,7 @@ def send_email_alert(jobs: list[dict]):
         print(f"  Email skipped: missing notification config fields: {', '.join(missing)}")
         return
 
-    now = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+    now = datetime.now(IST).strftime("%B %d, %Y at %I:%M %p IST")
 
     all_sorted = sort_jobs_by_recency(jobs)
 
@@ -515,7 +514,7 @@ def send_email_alert(jobs: list[dict]):
     msg["Subject"] = f"{len(jobs)} New Software Engineer Jobs — {', '.join(p for p, _ in sorted_platforms)}"
     msg["From"]    = cfg["email_sender"]
     msg["To"]      = cfg["email_recipient"]
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
 
     try:
         # Switched to Port 587 (TLS) to prevent ISP blocking

@@ -50,8 +50,8 @@ def make_job_id(url: str) -> str:
 
 def build_glassdoor_url(role: str, location: str = "India") -> str:
     # fromAge=3 → posted in the last 3 days at Glassdoor query level.
-    # We use 3 (not 1) so jobs posted 23-47h ago aren't missed by Glassdoor's
-    # day-boundary rounding. The Python freshness_hours filter (default 24h)
+    # We use 3 (not 2) so jobs posted 47h ago aren't missed by Glassdoor's
+    # day-boundary rounding. The Python freshness_hours filter (default 48h)
     # enforces the precise cutoff afterward.
     # sortBy=date_desc → most recent first
     return (
@@ -62,7 +62,7 @@ def build_glassdoor_url(role: str, location: str = "India") -> str:
 
 
 def _max_jobs() -> int:
-    return int(SEARCH.get("max_jobs_per_search", 20))
+    return int(SEARCH.get("max_jobs_per_search", 25))
 
 
 async def _dismiss_modal(page) -> None:

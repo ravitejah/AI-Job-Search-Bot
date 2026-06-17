@@ -22,13 +22,15 @@ from config import DATABASE
 
 
 def get_connection():
-    Path(DATABASE["path"]).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DATABASE["path"])
+    db_path = DATABASE.get("path", "data/jobs.db")
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     # WAL: allows concurrent reads while a write is in progress; much faster
     # for the incremental-save pattern (40+ individual writes per scoring run).
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 

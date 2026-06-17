@@ -33,13 +33,14 @@ def make_job_id(url: str) -> str:
 
 
 def build_linkedin_url(role: str, location: str) -> str:
-    # f_TPR=r86400  → posted in the last 24 hours
-    # sortBy=DD     → most recent first
-    # f_E=2,3       → Entry level (2) + Associate (3) — platform-level filter
+    # f_TPR=r<seconds> → posted within the freshness window (stays in sync with config)
+    # sortBy=DD        → most recent first
+    # f_E=2,3          → Entry level (2) + Associate (3) — platform-level filter
+    freshness_seconds = int(SEARCH.get("freshness_hours", 48)) * 3600
     return (
         "https://www.linkedin.com/jobs/search/"
         f"?keywords={quote(role)}&location={quote(location)}"
-        "&f_TPR=r86400&sortBy=DD&f_E=2%2C3"
+        f"&f_TPR=r{freshness_seconds}&sortBy=DD&f_E=2%2C3"
     )
 
 
@@ -138,7 +139,10 @@ async def run_linkedin_scraper() -> list:
                 headless=True,
                 args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
             )
-            context = await browser.new_context(user_agent=random_ua())
+            context = await browser.new_context(
+                user_agent=random_ua(),
+                locale="en-IN",
+            )
             page = await context.new_page()
             query_num = 0
             try:
@@ -186,7 +190,10 @@ async def fetch_linkedin_descriptions(jobs: list) -> list:
                 headless=True,
                 args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
             )
-            context = await browser.new_context(user_agent=random_ua())
+            context = await browser.new_context(
+                user_agent=random_ua(),
+                locale="en-IN",
+            )
 
             async def _fetch_one(job: dict) -> None:
                 if not is_valid_url(job.get("url", "")):
