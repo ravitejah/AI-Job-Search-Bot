@@ -278,7 +278,7 @@ def is_experience_violation(text: str, max_years: float = None) -> bool:
     return any(years >= limit for years in _extract_min_experience_years(text.lower()))
 
 
-def _clean_description(text: str, max_chars: int = 2000) -> str:
+def _clean_description(text: str, max_chars: int = 3000) -> str:
     """
     Strip boilerplate footer lines and collapse excess blank lines before
     sending to Groq. Reduces token usage and improves signal quality.
